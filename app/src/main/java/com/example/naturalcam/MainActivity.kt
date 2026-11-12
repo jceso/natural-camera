@@ -43,6 +43,7 @@ import android.widget.FrameLayout
 import android.widget.VideoView
 import android.widget.MediaController
 import android.graphics.Bitmap
+import androidx.core.graphics.ColorUtils
 import java.io.File
 
 class MainActivity : AppCompatActivity() {
@@ -53,14 +54,23 @@ class MainActivity : AppCompatActivity() {
         private const val ROLLEI_VENDOR_ID = 0x1B3F
         private const val ROLLEI_PRODUCT_ID = 0x8301
 
-        private val BG_COLOR = Color.rgb(18, 20, 25)
-        private val CARD_COLOR = Color.rgb(29, 32, 39)
-        private val CARD_SECONDARY = Color.rgb(39, 43, 52)
-        private val TEXT_PRIMARY = Color.rgb(240, 242, 246)
-        private val TEXT_SECONDARY = Color.rgb(155, 162, 175)
-        private val ACCENT_COLOR = Color.rgb(115, 160, 220)
-        private val SUCCESS_COLOR = Color.rgb(85, 190, 135)
-        private val FAILURE_COLOR = Color.rgb(184, 44, 44)
+        private val BG_COLOR = Color.rgb(11, 13, 20)
+        private val CARD_COLOR = Color.rgb(21, 25, 37)
+        private val CARD_SECONDARY = Color.rgb(27, 33, 48)
+
+        private val TEXT_PRIMARY = Color.rgb(238, 235, 222)
+        private val TEXT_SECONDARY = Color.rgb(158, 169, 181)
+        private val TEXT_TERTIARY = Color.rgb(112, 128, 145)
+
+        //private val ACCENT_COLOR = Color.rgb(69, 243, 224)    // ciano neon
+        //private val ACCENT_COLOR = Color.rgb(95, 231, 255)    //Prima versione
+        private val ACCENT_COLOR = Color.rgb(90, 210, 230)    //Vintage display
+        //private val ACCENT_COLOR = Color.rgb(108, 220, 255)
+        private val SUCCESS_COLOR = Color.rgb(69, 243, 170)
+        private val FAILURE_COLOR = Color.rgb(255, 79, 163) // magenta neon
+
+        private val AMBER_COLOR = Color.rgb(246, 193, 119)
+        private val MUTED_CYAN = Color.rgb(133, 195, 190)
     }
 
     private lateinit var usbManager: UsbManager
@@ -145,10 +155,9 @@ class MainActivity : AppCompatActivity() {
     private fun createInterface() {
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(20), dp(32), dp(20), dp(32))
+            setPadding(dp(20), dp(48), dp(20), dp(32))
             setBackgroundColor(BG_COLOR)
         }
-
         val scrollView = ScrollView(this).apply {
             isFillViewport = true
             addView(root)
@@ -157,16 +166,17 @@ class MainActivity : AppCompatActivity() {
         // Intestazione
         val title = TextView(this).apply {
             text = "Natural Camera"
-            textSize = 30f
+            textSize = 29f
             setTextColor(TEXT_PRIMARY)
             setTypeface(null, Typeface.BOLD)
+            letterSpacing = 0.04f
         }
         root.addView(title)
 
         val subtitle = TextView(this).apply {
             text = "La tua fotocamera, senza complicazioni."
             textSize = 14f
-            setTextColor(TEXT_SECONDARY)
+            setTextColor(MUTED_CYAN)
         }
         root.addView(subtitle)
         root.addView(spacer(30))
@@ -186,13 +196,11 @@ class MainActivity : AppCompatActivity() {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
         }
-
         val connectionIndicator = TextView(this).apply {
             text = "●"
-            textSize = 18f
-            setTextColor(Color.rgb(170, 175, 185))
+            textSize = 16f
+            setTextColor(ACCENT_COLOR)
         }
-
         statusText = TextView(this).apply {
             text = "In attesa di connessione"
             textSize = 18f
@@ -200,26 +208,21 @@ class MainActivity : AppCompatActivity() {
             setTextColor(TEXT_SECONDARY)
             setPadding(dp(10), 0, 0, 0)
         }
-
         connectionHeader.addView(connectionIndicator)
         connectionHeader.addView(statusText)
 
         connectionCard.addView(connectionHeader)
-
         statusDescription = TextView(this).apply {
             text = "Collega la Rollei tramite USB OTG."
             textSize = 14f
-            setTextColor(Color.rgb(115, 121, 132))
+            setTextColor(TEXT_TERTIARY)
             setPadding(0, dp(8), 0, 0)
         }
-
         connectionCard.addView(statusDescription)
-
         root.addView(connectionCard)
-        root.addView(spacer(26))
+        root.addView(spacer(16))
 
         // Pulsante ricerca
-
         searchButton = Button(this).apply {
             text = "AGGIORNA GALLERIA"
             textSize = 14f
@@ -237,63 +240,45 @@ class MainActivity : AppCompatActivity() {
                     return@setOnClickListener
                 }
 
-                if (usbManager.hasPermission(device)) {
+                if (usbManager.hasPermission(device))
                     loadMedia(device)
-                } else {
+                else
                     requestUsbPermission(device)
-                }
             }
         }
-
         root.addView(
             searchButton,
-            LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                dp(58)
-            )
+            LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(58))
         )
-
-        root.addView(spacer(30))
+        root.addView(spacer(28))
 
         // Galleria
-
         val galleryHeader = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
         }
-
         val galleryTitle = TextView(this).apply {
             text = "I tuoi contenuti"
             textSize = 21f
             setTypeface(null, Typeface.BOLD)
-            setTextColor(Color.rgb(30, 35, 44))
+            setTextColor(TEXT_PRIMARY)
         }
-
         galleryHeader.addView(
             galleryTitle,
-            LinearLayout.LayoutParams(
-                0,
-                ViewGroup.LayoutParams.WRAP_CONTENT,
-                1f
-            )
+            LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
         )
-
         root.addView(galleryHeader)
         root.addView(spacer(5))
 
         messageText = TextView(this).apply {
             text = "Collega la fotocamera e cerca i tuoi contenuti."
             textSize = 13f
-            setTextColor(Color.rgb(125, 131, 141))
+            setTextColor(TEXT_SECONDARY)
         }
-
         root.addView(messageText)
         root.addView(spacer(16))
 
-        mediaListContainer = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-        }
-
+        mediaListContainer = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         root.addView(mediaListContainer)
 
         setContentView(scrollView)
@@ -611,7 +596,7 @@ class MainActivity : AppCompatActivity() {
             text = file.name
             textSize = 14f
             setTypeface(null, Typeface.BOLD)
-            setTextColor(Color.rgb(35, 40, 48))
+            setTextColor(TEXT_PRIMARY)
             maxLines = 2
             ellipsize = android.text.TextUtils.TruncateAt.END
         }
@@ -620,20 +605,15 @@ class MainActivity : AppCompatActivity() {
             text = if (file.isVideo) "VIDEO" else "FOTOGRAFIA"
             textSize = 10f
             setTypeface(null, Typeface.BOLD)
-            setTextColor(
-                if (file.isVideo) {
-                    Color.rgb(75, 105, 160)
-                } else {
-                    Color.rgb(45, 135, 95)
-                }
-            )
+            setTextColor(if (file.isVideo) FAILURE_COLOR else ACCENT_COLOR)
+            letterSpacing = 0.12f
             setPadding(0, dp(4), 0, dp(2))
         }
 
         val path = TextView(this).apply {
             text = file.relativePath
             textSize = 11f
-            setTextColor(Color.rgb(135, 140, 150))
+            setTextColor(TEXT_TERTIARY)
             maxLines = 2
             ellipsize = android.text.TextUtils.TruncateAt.MIDDLE
         }
@@ -641,7 +621,7 @@ class MainActivity : AppCompatActivity() {
         val size = TextView(this).apply {
             text = formatFileSize(file.size)
             textSize = 11f
-            setTextColor(Color.rgb(110, 116, 126))
+            setTextColor(AMBER_COLOR)
             setPadding(0, dp(4), 0, 0)
         }
 
@@ -828,6 +808,7 @@ class MainActivity : AppCompatActivity() {
         return GradientDrawable().apply {
             setColor(color)
             cornerRadius = radius.toFloat()
+            setStroke(dp(1), ColorUtils.setAlphaComponent(ACCENT_COLOR, 45))
         }
     }
 
