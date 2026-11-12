@@ -983,7 +983,6 @@ class MainActivity : AppCompatActivity() {
                         start()
                     }
                 }
-
             } catch (e: Exception) {
                 Toast.makeText(this@MainActivity, "Impossibile aprire ${file.name}: ${e.message}", Toast.LENGTH_LONG).show()
             }
