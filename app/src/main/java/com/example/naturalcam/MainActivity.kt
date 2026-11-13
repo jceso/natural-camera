@@ -23,7 +23,6 @@ import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
-import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
@@ -43,6 +42,8 @@ import android.widget.FrameLayout
 import android.widget.VideoView
 import android.widget.MediaController
 import android.graphics.Bitmap
+import android.graphics.drawable.ColorDrawable
+import android.view.WindowManager
 import androidx.core.graphics.ColorUtils
 import java.io.File
 
@@ -90,6 +91,7 @@ class MainActivity : AppCompatActivity() {
     private var thumbnailBitmaps: Map<String, Bitmap> = emptyMap()
     private lateinit var listModeButton: TextView
     private lateinit var gridModeButton: TextView
+    private var blurredContentView: View? = null
 
     private var autoScanDeviceId: Int? = null
     private var permissionRequestedDeviceId: Int? = null
@@ -128,7 +130,7 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        usbManager = getSystemService(Context.USB_SERVICE) as UsbManager
+        usbManager = getSystemService(USB_SERVICE) as UsbManager
 
         createInterface()
         scanUsbDevices()
@@ -849,36 +851,77 @@ class MainActivity : AppCompatActivity() {
     }
 
 
-    private fun openMediaViewer(
-        device: UsbDevice,
-        position: Int
-    ) {
-
-        if (mediaFiles.isEmpty()) return
+    private fun openMediaViewer(device: UsbDevice, position: Int) {
+        if (mediaFiles.isEmpty())
+            return
 
         viewerPosition = position
-
         val dialog = Dialog(this)
 
-        val container = FrameLayout(this).apply {
-            setBackgroundColor(Color.BLACK)
+        // Contenitore principale
+        val container = FrameLayout(this).apply { setBackgroundColor(Color.TRANSPARENT) }
+        // Sfondo nero con opacità del 70%
+        val darkOverlay = View(this).apply { setBackgroundColor(Color.argb(179, 0, 0, 0)) }
+
+        container.addView(
+            darkOverlay,
+            FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT
+            )
+        )
+
+        // Layout principale
+        val content = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(16), dp(12), dp(16), dp(18))
         }
+
+        container.addView(
+            content,
+            FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT
+            )
+        )
+
+        // -----------------------------------------------------
+        // HEADER CON PULSANTE CHIUSURA
+        // -----------------------------------------------------
+        val header = FrameLayout(this)
+
+        val closeButton = TextView(this).apply {
+            text = "×"
+            textSize = 34f
+            gravity = Gravity.CENTER
+            setTextColor(Color.WHITE)
+            background = roundedBackground(CARD_SECONDARY, dp(30))
+            isClickable = true
+            isFocusable = true
+            setOnClickListener { closeMediaViewer() }
+        }
+
+        header.addView(
+            closeButton,
+            FrameLayout.LayoutParams(dp(44), dp(44), Gravity.END or Gravity.CENTER_VERTICAL)
+        )
+
+        content.addView(
+            header,
+            LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(50))
+        )
+
+        // -----------------------------------------------------
+        // AREA FOTOGRAFIA
+        // -----------------------------------------------------
+        val imageArea = FrameLayout(this)
 
         val image = ImageView(this).apply {
             scaleType = ImageView.ScaleType.FIT_CENTER
             adjustViewBounds = true
         }
 
-        val video = VideoView(this)
-
-        val info = TextView(this).apply {
-            textSize = 13f
-            setTextColor(Color.WHITE)
-            setPadding(dp(18), dp(14), dp(18), dp(14))
-            setBackgroundColor(Color.argb(170, 0, 0, 0))
-        }
-
-        container.addView(
+        imageArea.addView(
             image,
             FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
@@ -886,70 +929,192 @@ class MainActivity : AppCompatActivity() {
             )
         )
 
-        container.addView(
-            video,
-            FrameLayout.LayoutParams(
+        content.addView(
+            imageArea,
+            LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f)
+                                 .apply {
+                                            topMargin = dp(8)
+                                            bottomMargin = dp(14)
+                                        }
+        )
+
+        // -----------------------------------------------------
+        // PULSANTI FUTURE FUNZIONI
+        // -----------------------------------------------------
+
+        val actions = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER
+        }
+
+        fun createViewerAction(symbol: String, label: String): View {
+            val action = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                gravity = Gravity.CENTER
+                setPadding(dp(5), dp(10), dp(5), dp(10))
+                background = roundedBackground(CARD_SECONDARY, dp(12))
+            }
+
+            val icon = TextView(this).apply {
+                text = symbol
+                textSize = 21f
+                gravity = Gravity.CENTER
+                setTextColor(ACCENT_COLOR)
+            }
+
+            val text = TextView(this).apply {
+                this.text = label
+                textSize = 9f
+                setTypeface(null, Typeface.BOLD)
+                setTextColor(TEXT_PRIMARY)
+                gravity = Gravity.CENTER
+                setPadding(0, dp(5), 0, 0)
+            }
+
+            action.addView(icon)
+            action.addView(text)
+
+            return action
+        }
+
+        val actionItems = listOf(
+            createViewerAction("✦", "LOOK"),
+            createViewerAction("☷", "REGOLA"),
+            createViewerAction("↓", "SALVA"),
+            createViewerAction("↗", "CONDIVIDI")
+        )
+
+        actionItems.forEach { action ->
+            actions.addView(
+                action,
+                LinearLayout.LayoutParams(0, dp(64), 1f)
+                                     .apply {
+                                                marginStart = dp(4)
+                                                marginEnd = dp(4)
+                                            }
+            )
+        }
+
+        content.addView(
+            actions,
+            LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(64))
+        )
+
+        // -----------------------------------------------------
+        // INFORMAZIONI FOTOGRAFIA
+        // -----------------------------------------------------
+        val info = TextView(this).apply {
+            textSize = 12f
+            setTextColor(TEXT_PRIMARY)
+            setPadding(dp(4), dp(14), dp(4), 0)
+            maxLines = 3
+        }
+
+        content.addView(
+            info,
+            LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.MATCH_PARENT
+                ViewGroup.LayoutParams.WRAP_CONTENT
             )
         )
 
-        val infoParams = FrameLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT,
-            ViewGroup.LayoutParams.WRAP_CONTENT,
-            Gravity.BOTTOM
-        )
-
-        container.addView(info, infoParams)
-
+        // Riferimenti utilizzati dal viewer
         viewerDialog = dialog
         viewerImage = image
-        viewerVideo = video
+        viewerVideo = null
         viewerInfo = info
 
+        // -----------------------------------------------------
+        // CONFIGURAZIONE DIALOG
+        // -----------------------------------------------------
         dialog.setContentView(container)
-        dialog.window?.setBackgroundDrawableResource(android.R.color.black)
-        dialog.window?.setLayout(
-            ViewGroup.LayoutParams.MATCH_PARENT,
-            ViewGroup.LayoutParams.MATCH_PARENT
-        )
+        dialog.setCancelable(false)
+
+        dialog.window?.apply {
+            setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
+            setLayout(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT
+            )
+
+            addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)
+            setDimAmount(0f)
+        }
 
         dialog.show()
-
         dialog.window?.setLayout(
             ViewGroup.LayoutParams.MATCH_PARENT,
             ViewGroup.LayoutParams.MATCH_PARENT
         )
 
-        val gestureDetector = GestureDetector(this, object : GestureDetector.SimpleOnGestureListener() {
-            override fun onDown(e: MotionEvent): Boolean = true
+        // -----------------------------------------------------
+        // SFONDO BLUR (ANDROID 12+)
+        // -----------------------------------------------------
+        val underlyingContent = window.decorView.findViewById<View>(android.R.id.content)
 
-            override fun onFling(e1: MotionEvent?,
-                                 e2: MotionEvent,
-                                 velocityX: Float,
-                                 velocityY: Float): Boolean {
-                val start = e1 ?: return false
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            underlyingContent.setRenderEffect(
+                android.graphics.RenderEffect.createBlurEffect(
+                    22f,
+                    22f,
+                    android.graphics.Shader.TileMode.CLAMP
+                )
+            )
 
-                val deltaX = e2.x - start.x
-                val deltaY = e2.y - start.y
+            blurredContentView = underlyingContent
+        }
 
-                if (kotlin.math.abs(deltaX) > dp(70) &&
-                    kotlin.math.abs(deltaX) > kotlin.math.abs(deltaY) &&
-                    kotlin.math.abs(velocityX) > dp(100)) {
-                    if (deltaX < 0)
-                        showViewerItem(device, viewerPosition + 1)
-                    else
-                        showViewerItem(device, viewerPosition - 1)
-
-                    return true
-                }
-
-                return false
+        dialog.setOnDismissListener {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                blurredContentView?.setRenderEffect(null)
             }
-        })
 
-        // Lo swipe funziona sia sulle foto che sul video.
-        container.setOnTouchListener { _, event -> gestureDetector.onTouchEvent(event) }
+            blurredContentView = null
+            viewerDialog = null
+            viewerImage = null
+            viewerVideo = null
+            viewerInfo = null
+        }
+
+        // -----------------------------------------------------
+        // SWIPE PER CAMBIARE FOTOGRAFIA
+        // -----------------------------------------------------
+
+        val gestureDetector = GestureDetector(
+            this,
+            object : GestureDetector.SimpleOnGestureListener() {
+
+                override fun onDown(e: MotionEvent): Boolean = true
+
+                override fun onFling(
+                    e1: MotionEvent?,
+                    e2: MotionEvent,
+                    velocityX: Float,
+                    velocityY: Float
+                ): Boolean {
+
+                    val start = e1 ?: return false
+
+                    val deltaX = e2.x - start.x
+                    val deltaY = e2.y - start.y
+
+                    if (kotlin.math.abs(deltaX) > dp(70) &&
+                        kotlin.math.abs(deltaX) > kotlin.math.abs(deltaY) &&
+                        kotlin.math.abs(velocityX) > dp(100)) {
+                            if (deltaX < 0)
+                                showViewerItem(device, viewerPosition + 1)
+                            else
+                                showViewerItem(device, viewerPosition - 1)
+
+                            return true
+                    }
+
+                    return false
+                }
+            }
+        )
+
+        imageArea.setOnTouchListener { _, event -> gestureDetector.onTouchEvent(event) }
 
         showViewerItem(device, position)
     }
@@ -966,8 +1131,7 @@ class MainActivity : AppCompatActivity() {
         viewerImage?.visibility = View.GONE
         viewerImage?.setImageDrawable(null)
 
-        viewerInfo?.text = "${file.name}\n${file.relativePath}\n" +
-                "${position + 1} / ${mediaFiles.size}"
+        viewerInfo?.text = "${file.name}\n${file.relativePath}\n${position + 1} / ${mediaFiles.size}"
 
         lifecycleScope.launch {
 
@@ -1091,6 +1255,11 @@ class MainActivity : AppCompatActivity() {
 
     private fun closeMediaViewer() {
         viewerVideo?.stopPlayback()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S)
+            blurredContentView?.setRenderEffect(null)
+
+        blurredContentView = null
+
         viewerDialog?.dismiss()
 
         viewerDialog = null
