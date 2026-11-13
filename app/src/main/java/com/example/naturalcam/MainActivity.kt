@@ -47,6 +47,10 @@ import android.graphics.drawable.ColorDrawable
 import android.view.WindowManager
 import android.widget.ProgressBar
 import androidx.core.graphics.ColorUtils
+import com.example.naturalcam.photoProcessing.ColorPreset
+import com.example.naturalcam.photoProcessing.ColorPresets
+import com.example.naturalcam.photoProcessing.VibranceProcessor
+import kotlinx.coroutines.Job
 import java.io.File
 
 class MainActivity : AppCompatActivity() {
@@ -103,6 +107,16 @@ class MainActivity : AppCompatActivity() {
     private var viewerImage: ImageView? = null
     private var viewerVideo: VideoView? = null
     private var viewerInfo: TextView? = null
+
+
+    // Per i presets
+    private var viewerOriginalBitmap: Bitmap? = null
+    private var viewerSelectedPreset: ColorPreset = ColorPresets.natural
+    private var viewerFilterEnabled = false
+
+    private var viewerRenderToken = 0
+    private var viewerLoadJob: Job? = null
+
 
     private val usbPermissionReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
@@ -949,12 +963,10 @@ class MainActivity : AppCompatActivity() {
             isFocusable = true
             setOnClickListener { closeMediaViewer() }
         }
-
         header.addView(
             closeButton,
             FrameLayout.LayoutParams(dp(44), dp(44), Gravity.END or Gravity.CENTER_VERTICAL)
         )
-
         content.addView(
             header,
             LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(50))
@@ -963,80 +975,218 @@ class MainActivity : AppCompatActivity() {
         // -----------------------------------------------------
         // AREA FOTOGRAFIA
         // -----------------------------------------------------
-        val imageArea = FrameLayout(this)
+        val middleArea = FrameLayout(this)
+        content.addView(
+            middleArea,
+            LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f)
+        )
+
+        // Foto + toggle, centrati nell'area elastica
+        val imageAndFilter = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        middleArea.addView(
+            imageAndFilter,
+            FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                Gravity.CENTER
+            )
+        )
 
         val image = ImageView(this).apply {
             scaleType = ImageView.ScaleType.FIT_CENTER
             adjustViewBounds = true
         }
-
-        imageArea.addView(
+        imageAndFilter.addView(
             image,
-            FrameLayout.LayoutParams(
+            LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.MATCH_PARENT
+                ViewGroup.LayoutParams.WRAP_CONTENT
             )
         )
 
+        // -----------------------------------------------------
+        // TOGGLE FILTRO - SUBITO SOTTO LA FOTO
+        // -----------------------------------------------------
+        val filterRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.END or Gravity.CENTER_VERTICAL
+        }
+        val filterToggle = TextView(this).apply {
+            text = ""
+            textSize = 14f
+            gravity = Gravity.CENTER
+            setTextColor(Color.BLACK)
+            isClickable = true
+            isFocusable = true
+            contentDescription = "Attiva o disattiva filtro"
+        }
+
+        fun updateFilterToggle() {
+            filterToggle.text = if (viewerFilterEnabled) "✓" else ""
+
+            filterToggle.background = GradientDrawable().apply {
+                shape = GradientDrawable.RECTANGLE
+                cornerRadius = dp(6).toFloat()
+                setColor(if (viewerFilterEnabled) ACCENT_COLOR else Color.TRANSPARENT)
+                setStroke(dp(1), ACCENT_COLOR)
+            }
+        }
+
+        updateFilterToggle()
+
+        filterToggle.setOnClickListener {
+            viewerFilterEnabled = !viewerFilterEnabled
+            updateFilterToggle()
+            renderViewerImage()
+        }
+        filterRow.addView(
+            filterToggle,
+            LinearLayout.LayoutParams(dp(25), dp(25))
+        )
+
+        // Aggiungi filterRow a imageAndFilter, non direttamente a content
+        imageAndFilter.addView(
+            filterRow,
+            LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                dp(29)
+            ).apply {
+                topMargin = dp(4)
+            }
+        )
+
+        // Pannello inferiore: contiene i pulsanti e le informazioni
+        val bottomPanel = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+
         content.addView(
-            imageArea,
-            LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f)
-                                 .apply {
-                                            topMargin = dp(8)
-                                            bottomMargin = dp(14)
-                                        }
+            bottomPanel,
+            LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            )
         )
 
         // -----------------------------------------------------
-        // PULSANTI FUTURE FUNZIONI
+        // CHIP PROFILI COLORE
         // -----------------------------------------------------
+        val lookChips = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.START or Gravity.CENTER_VERTICAL
+            visibility = View.INVISIBLE
+        }
+        val presetChips = mutableListOf<Pair<TextView, ColorPreset>>()
 
+        fun updateLookChipStyles() {
+            presetChips.forEach { (chip, preset) ->
+                val selected = preset.id == viewerSelectedPreset.id
+                chip.background = roundedBackground(
+                    if (selected) ACCENT_COLOR else CARD_SECONDARY,
+                    dp(20)
+                )
+                chip.setTextColor(if (selected) Color.BLACK else TEXT_PRIMARY)
+            }
+        }
+
+        fun createLookChip(label: String, preset: ColorPreset): TextView {
+            val chip = TextView(this).apply {
+                text = label
+                textSize = 10f
+                setTypeface(null, Typeface.BOLD)
+                gravity = Gravity.CENTER
+                setPadding(dp(13), dp(8), dp(13), dp(8))
+                background = roundedBackground(CARD_SECONDARY, dp(20))
+                isClickable = true
+                isFocusable = true
+
+                setOnClickListener {
+                    viewerSelectedPreset = preset
+                    viewerFilterEnabled = true
+
+                    updateFilterToggle()
+                    updateLookChipStyles()
+                    renderViewerImage()
+                }
+            }
+
+            presetChips.add(chip to preset)
+            return chip
+        }
+
+        lookChips.addView(
+            createLookChip("NATURAL", ColorPresets.natural),
+            LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(34))
+                                 .apply { marginEnd = dp(8) }
+        )
+        lookChips.addView(
+            createLookChip("VIVID", ColorPresets.vivid),
+            LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(34))
+                                 .apply { marginEnd = dp(8) }
+        )
+        lookChips.addView(
+            createLookChip("B/W", ColorPresets.blackAndWhite),
+            LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(34))
+                                 .apply { marginEnd = dp(8) }
+        )
+
+        updateLookChipStyles()
+
+        bottomPanel.addView(
+            lookChips,
+            LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(42))
+        )
+
+        // -----------------------------------------------------
+        // QUATTRO PULSANTI PRINCIPALI - SOLO ICONE
+        // Ordine da sinistra a destra:
+        // REGOLA - CONDIVIDI - SALVA - LOOK
+        // -----------------------------------------------------
         val actions = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
         }
 
-        fun createViewerAction(symbol: String, label: String): View {
-            val action = LinearLayout(this).apply {
-                orientation = LinearLayout.VERTICAL
-                gravity = Gravity.CENTER
-                setPadding(dp(5), dp(10), dp(5), dp(10))
-                background = roundedBackground(CARD_SECONDARY, dp(12))
-            }
-
-            val icon = TextView(this).apply {
+        fun createViewerAction(symbol: String, description: String, onClick: (() -> Unit)? = null): TextView {
+            return TextView(this).apply {
                 text = symbol
-                textSize = 21f
+                textSize = 24f
                 gravity = Gravity.CENTER
                 setTextColor(ACCENT_COLOR)
+                background = roundedBackground(CARD_SECONDARY, dp(13))
+                isClickable = true
+                isFocusable = true
+                contentDescription = description
+
+                setOnClickListener { onClick?.invoke() }
             }
-
-            val text = TextView(this).apply {
-                this.text = label
-                textSize = 9f
-                setTypeface(null, Typeface.BOLD)
-                setTextColor(TEXT_PRIMARY)
-                gravity = Gravity.CENTER
-                setPadding(0, dp(5), 0, 0)
-            }
-
-            action.addView(icon)
-            action.addView(text)
-
-            return action
         }
 
-        val actionItems = listOf(
-            createViewerAction("✦", "LOOK"),
-            createViewerAction("☷", "REGOLA"),
-            createViewerAction("↓", "SALVA"),
-            createViewerAction("↗", "CONDIVIDI")
-        )
+        // LOOK: mostra/nasconde i profili colore
+        val lookButton = createViewerAction("✦", "Profili colore") {
+            lookChips.visibility =
+                if (lookChips.visibility == View.VISIBLE) View.INVISIBLE
+                else View.VISIBLE
+        }
 
-        actionItems.forEach { action ->
+        // SALVA
+        val saveButton = createViewerAction("↓", "Salva") {
+            saveCurrentImageToGallery()
+        }
+
+        // CONDIVIDI
+        val shareButton = createViewerAction("↗", "Condividi")
+
+        // REGOLA
+        val adjustButton = createViewerAction("☷", "Regola")
+
+        listOf(
+            adjustButton,
+            saveButton,
+            shareButton,
+            lookButton
+        ).forEach { button ->
             actions.addView(
-                action,
-                LinearLayout.LayoutParams(0, dp(64), 1f)
+                button,
+                LinearLayout.LayoutParams(0, dp(52), 1f)
                                      .apply {
                                                 marginStart = dp(4)
                                                 marginEnd = dp(4)
@@ -1044,10 +1194,11 @@ class MainActivity : AppCompatActivity() {
             )
         }
 
-        content.addView(
+        bottomPanel.addView(
             actions,
-            LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(64))
+            LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(56))
         )
+
 
         // -----------------------------------------------------
         // INFORMAZIONI FOTOGRAFIA
@@ -1055,11 +1206,11 @@ class MainActivity : AppCompatActivity() {
         val info = TextView(this).apply {
             textSize = 12f
             setTextColor(TEXT_PRIMARY)
-            setPadding(dp(4), dp(14), dp(4), 0)
-            maxLines = 3
+            setPadding(dp(4), dp(12), dp(4), 0)
+            maxLines = 2
         }
 
-        content.addView(
+        bottomPanel.addView(
             info,
             LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
@@ -1114,9 +1265,8 @@ class MainActivity : AppCompatActivity() {
         }
 
         dialog.setOnDismissListener {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S)
                 blurredContentView?.setRenderEffect(null)
-            }
 
             blurredContentView = null
             viewerDialog = null
@@ -1128,7 +1278,6 @@ class MainActivity : AppCompatActivity() {
         // -----------------------------------------------------
         // SWIPE PER CAMBIARE FOTOGRAFIA
         // -----------------------------------------------------
-
         val gestureDetector = GestureDetector(
             this,
             object : GestureDetector.SimpleOnGestureListener() {
@@ -1163,15 +1312,58 @@ class MainActivity : AppCompatActivity() {
             }
         )
 
-        imageArea.setOnTouchListener { _, event -> gestureDetector.onTouchEvent(event) }
+        imageAndFilter.setOnTouchListener { _, event -> gestureDetector.onTouchEvent(event) }
 
         showViewerItem(device, position)
+    }
+
+    private fun renderViewerImage() {
+        val source = viewerOriginalBitmap ?: return
+        val imageView = viewerImage ?: return
+        val positionAtStart = viewerPosition
+        val renderToken = ++viewerRenderToken
+
+        if (!viewerFilterEnabled) {
+            imageView.setImageBitmap(source)
+            return
+        }
+
+        val preset = viewerSelectedPreset
+
+        lifecycleScope.launch {
+            try {
+                val result = withContext(Dispatchers.Default) {
+                    VibranceProcessor.apply(source, preset)
+                }
+
+                // Evita di mostrare il risultato se nel frattempo è stata aperta
+                // un'altra foto o è stata richiesta una nuova elaborazione.
+                if (renderToken == viewerRenderToken &&
+                    positionAtStart == viewerPosition &&
+                    viewerImage === imageView
+                ) {
+                    imageView.setImageBitmap(result)
+                }
+            } catch (e: Exception) {
+                Toast.makeText(
+                    this@MainActivity,
+                    "Impossibile applicare il preset: ${e.localizedMessage}",
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
+        }
     }
 
     private fun showViewerItem(device: UsbDevice, position: Int) {
         if (position !in mediaFiles.indices)
             return
         viewerPosition = position
+        viewerOriginalBitmap = null
+        viewerRenderToken++
+
+        viewerLoadJob?.cancel()
+//        viewerSelectedPreset = ColorPresets.natural
+//        viewerFilterEnabled = false
         val file = mediaFiles[position]
 
         viewerVideo?.stopPlayback()
@@ -1180,18 +1372,20 @@ class MainActivity : AppCompatActivity() {
         viewerImage?.visibility = View.GONE
         viewerImage?.setImageDrawable(null)
 
-        viewerInfo?.text = "${file.name}\n${file.relativePath}\n${position + 1} / ${mediaFiles.size}"
+        viewerInfo?.text = "${file.name}\n${position + 1} / ${mediaFiles.size}"
 
-        lifecycleScope.launch {
-
+        viewerLoadJob = lifecycleScope.launch {
             try {
                 val bytes = withContext(Dispatchers.IO) { readMediaFile(device, file) }
 
                 if (file.isImage) {
-                    val bitmap = decodeViewerBitmap(bytes)
+                    val bitmap = withContext(Dispatchers.Default) { decodeViewerBitmap(bytes) }
+                    if (position != viewerPosition)
+                        return@launch
 
-                    viewerImage?.setImageBitmap(bitmap)
+                    viewerOriginalBitmap = bitmap
                     viewerImage?.visibility = View.VISIBLE
+                    renderViewerImage()
                 } else if (file.isVideo) {
                     val videoFile = withContext(Dispatchers.IO) {
                         val cacheFile = File(cacheDir, "viewer_${position}.${file.extension}")
@@ -1347,6 +1541,150 @@ class MainActivity : AppCompatActivity() {
             bytes.size,
             options
         )
+    }
+
+
+    private val storagePermissionRequestCode = 4731
+
+    private fun saveCurrentImageToGallery() {
+        val drawable = viewerImage?.drawable
+        if (drawable == null) {
+            Toast.makeText(this, "Nessuna immagine da salvare", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        // Il permesso è necessario solo fino ad Android 9 (API 28).
+        if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.P &&
+            checkSelfPermission(android.Manifest.permission.WRITE_EXTERNAL_STORAGE) !=
+            android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                requestPermissions(arrayOf(android.Manifest.permission.WRITE_EXTERNAL_STORAGE), storagePermissionRequestCode)
+                return
+        }
+
+        try {
+            val bitmap = drawableToBitmap(
+                drawable,
+                viewerImage?.width ?: 1,
+                viewerImage?.height ?: 1
+            )
+            val fileName = "IMG_${java.text.SimpleDateFormat(
+                "yyyyMMdd_HHmmss",
+                java.util.Locale.US
+            ).format(java.util.Date())}.jpg"
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                val values = android.content.ContentValues().apply {
+                    put(android.provider.MediaStore.Images.Media.DISPLAY_NAME, fileName)
+                    put(android.provider.MediaStore.Images.Media.MIME_TYPE, "image/jpeg")
+                    put(
+                        android.provider.MediaStore.Images.Media.RELATIVE_PATH,
+                        android.os.Environment.DIRECTORY_PICTURES
+                    )
+                    put(android.provider.MediaStore.Images.Media.IS_PENDING, 1)
+                }
+
+                val uri = contentResolver.insert(
+                    android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+                    values
+                ) ?: throw IOException("Impossibile creare il file")
+
+                try {
+                    val output = contentResolver.openOutputStream(uri)
+                        ?: throw IOException("Impossibile aprire il file")
+
+                    output.use {
+                        if (!bitmap.compress(Bitmap.CompressFormat.JPEG, 95, it))
+                            throw IOException("Impossibile codificare l'immagine")
+                    }
+
+                    val completedValues = android.content.ContentValues().apply {
+                        put(android.provider.MediaStore.Images.Media.IS_PENDING, 0)
+                    }
+                    contentResolver.update(uri, completedValues, null, null)
+                } catch (e: Exception) {
+                    contentResolver.delete(uri, null, null)
+                    throw e
+                }
+            } else {
+                val picturesDir = android.os.Environment.getExternalStoragePublicDirectory(
+                    android.os.Environment.DIRECTORY_PICTURES
+                )
+                if (!picturesDir.exists() && !picturesDir.mkdirs())
+                    throw IOException("Impossibile creare la cartella Pictures")
+
+                val file = File(picturesDir, fileName)
+                try {
+                    java.io.FileOutputStream(file).use {
+                        if (!bitmap.compress(Bitmap.CompressFormat.JPEG, 95, it)) {
+                            throw IOException("Impossibile codificare l'immagine")
+                        }
+                    }
+                } catch (e: Exception) {
+                    file.delete()
+                    throw e
+                }
+
+                android.media.MediaScannerConnection.scanFile(
+                    this,
+                    arrayOf(file.absolutePath),
+                    arrayOf("image/jpeg"),
+                    null
+                )
+            }
+
+            Toast.makeText(this, "Immagine salvata in Pictures", Toast.LENGTH_SHORT).show()
+        } catch (e: Exception) {
+            Toast.makeText(
+                this,
+                "Salvataggio non riuscito: ${e.localizedMessage ?: "errore sconosciuto"}",
+                Toast.LENGTH_LONG
+            ).show()
+        }
+    }
+
+    @Suppress("DEPRECATION")
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<out String>,
+        grantResults: IntArray
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+
+        if (requestCode == storagePermissionRequestCode) {
+            if (grantResults.firstOrNull() ==
+                android.content.pm.PackageManager.PERMISSION_GRANTED
+            ) {
+                saveCurrentImageToGallery()
+            } else {
+                Toast.makeText(this, "Permesso di archiviazione negato", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    private fun drawableToBitmap(
+        drawable: android.graphics.drawable.Drawable,
+        fallbackWidth: Int,
+        fallbackHeight: Int
+    ): Bitmap {
+        if (drawable is android.graphics.drawable.BitmapDrawable) {
+            val source = drawable.bitmap
+            if (source.config != Bitmap.Config.HARDWARE) {
+                return source
+            }
+            return source.copy(Bitmap.Config.ARGB_8888, false)
+                ?: throw java.io.IOException("Impossibile leggere l'immagine")
+        }
+
+        val width = drawable.intrinsicWidth.takeIf { it > 0 }
+            ?: fallbackWidth.coerceAtLeast(1)
+        val height = drawable.intrinsicHeight.takeIf { it > 0 }
+            ?: fallbackHeight.coerceAtLeast(1)
+
+        return Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888).also { bitmap ->
+            val canvas = android.graphics.Canvas(bitmap)
+            drawable.setBounds(0, 0, width, height)
+            drawable.draw(canvas)
+        }
     }
 }
 
