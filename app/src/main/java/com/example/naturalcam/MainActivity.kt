@@ -86,6 +86,10 @@ class MainActivity : AppCompatActivity() {
     private var isLoading = false
 
     private var mediaFiles: List<Fat32File> = emptyList()
+    private var isGridView = true
+    private var thumbnailBitmaps: Map<String, Bitmap> = emptyMap()
+    private lateinit var listModeButton: TextView
+    private lateinit var gridModeButton: TextView
 
     private var autoScanDeviceId: Int? = null
     private var permissionRequestedDeviceId: Int? = null
@@ -252,13 +256,23 @@ class MainActivity : AppCompatActivity() {
         )
         root.addView(spacer(28))
 
-        // Galleria
+        // ---------------------------------------------------------
+        // GALLERIA
+        // ---------------------------------------------------------
+        messageText = TextView(this).apply {
+            text = "Collega la fotocamera e cerca i tuoi contenuti."
+            textSize = 11f
+            setTextColor(TEXT_SECONDARY)
+        }
+        root.addView(messageText)
+        root.addView(spacer(12))
+
         val galleryHeader = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
         }
         val galleryTitle = TextView(this).apply {
-            text = "I tuoi contenuti"
+            text = "Contenuti recenti"
             textSize = 21f
             setTypeface(null, Typeface.BOLD)
             setTextColor(TEXT_PRIMARY)
@@ -267,15 +281,26 @@ class MainActivity : AppCompatActivity() {
             galleryTitle,
             LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
         )
-        root.addView(galleryHeader)
-        root.addView(spacer(5))
 
-        messageText = TextView(this).apply {
-            text = "Collega la fotocamera e cerca i tuoi contenuti."
-            textSize = 13f
-            setTextColor(TEXT_SECONDARY)
+        // Pulsante modalità lista/griglia
+        listModeButton = createModeButton("☷") {
+            isGridView = false
+            updateGalleryModeButtons()
+
+            selectedDevice?.let { displayMediaList(it, mediaFiles) }
         }
-        root.addView(messageText)
+        gridModeButton = createModeButton("▦") {
+            isGridView = true
+            updateGalleryModeButtons()
+
+            selectedDevice?.let { displayMediaList(it, mediaFiles) }
+        }
+        galleryHeader.addView(listModeButton)
+        galleryHeader.addView(spacer(8))
+        galleryHeader.addView(gridModeButton)
+
+        root.addView(galleryHeader)
+        updateGalleryModeButtons()
         root.addView(spacer(16))
 
         mediaListContainer = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
@@ -404,8 +429,7 @@ class MainActivity : AppCompatActivity() {
 
         lifecycleScope.launch {
             try {
-                val files = withContext(Dispatchers.IO) {
-
+                val scanResult = withContext(Dispatchers.IO) {
                     if (!usbManager.hasPermission(device))
                         throw IOException("Permesso USB non disponibile")
                     if (device.interfaceCount == 0)
@@ -455,9 +479,31 @@ class MainActivity : AppCompatActivity() {
                                 partition.startLba
                             )
 
-                            // Cerca immagini e video in tutte le cartelle.
-                            reader.listMedia()
+                            // Per il momento manteniamo solamente le fotografie.
+                            val images = reader.listMedia()
+                                .filter { it.isImage }
+                                .sortedBy { it.relativePath.lowercase() }
 
+                            // Generazione delle miniature durante la connessione USB.
+                            // Limitiamo le miniature iniziali per contenere i tempi di scansione.
+                            val thumbnails = LinkedHashMap<String, Bitmap>()
+
+                            images.take(60).forEach { file ->
+
+                                try {
+                                    val bytes = reader.readFile(file)
+                                    val bitmap = decodeThumbnail(bytes)
+
+                                    if (bitmap != null) {
+                                        thumbnails[file.relativePath] = bitmap
+                                    }
+
+                                } catch (_: Exception) {
+                                    // Una miniatura non riuscita non deve interrompere la scansione.
+                                }
+                            }
+
+                            Pair(images, thumbnails)
                         } finally {
                             connection.releaseInterface(usbInterface)
                         }
@@ -467,16 +513,16 @@ class MainActivity : AppCompatActivity() {
                     }
                 }
 
+                val files = scanResult.first
+                thumbnailBitmaps = scanResult.second
                 displayMediaList(device, files)
                 mediaFiles = files
 
-                val imageCount = files.count { it.isImage }
-                val videoCount = files.count { it.isVideo }
+                // Vengono prese solo le foto
+                //val imageCount = files.count { it.isImage }
+                //val videoCount = files.count { it.isVideo }
 
-                updateMessage(
-                    "${files.size} contenuti trovati · " +
-                            "$imageCount foto · $videoCount video"
-                )
+                updateMessage("${files.size} contenuti trovati · ${files.size} foto")
 
             } catch (e: Exception) {
 
@@ -504,12 +550,13 @@ class MainActivity : AppCompatActivity() {
 
     private fun displayMediaList(device: UsbDevice, files: List<Fat32File>) {
         mediaListContainer.removeAllViews()
-        mediaFiles = files
+        mediaFiles = files.filter { it.isImage }    // Filtro solo fotografie.
 
-        if (files.isEmpty()) {
+        val images = mediaFiles
+        if (images.isEmpty()) {
             mediaListContainer.addView(
                 TextView(this).apply {
-                    text = "Nessuna fotografia o video trovato."
+                    text = "Nessuna fotografia trovata."
                     textSize = 14f
                     setTextColor(TEXT_SECONDARY)
                     gravity = Gravity.CENTER
@@ -519,114 +566,143 @@ class MainActivity : AppCompatActivity() {
             return
         }
 
-        files.forEachIndexed { index, file ->
-            val card = createMediaCard(file)
+        // GRIGLIA: due card per riga.
+        if (isGridView) {
+            var index = 0
 
-            card.setOnClickListener {
-                openMediaViewer(device, index)
+            while (index < images.size) {
+                val row = LinearLayout(this).apply {
+                    orientation = LinearLayout.HORIZONTAL
+                    gravity = Gravity.TOP
+                }
+
+                for (column in 0..1) {
+                    val currentIndex = index + column
+
+                    if (currentIndex < images.size) {
+                        val file = images[currentIndex]
+                        val card = createMediaCard(file, true)
+
+                        card.setOnClickListener { openMediaViewer(device, currentIndex) }
+
+                        row.addView(
+                            card,
+                            LinearLayout.LayoutParams(
+                                0,
+                                ViewGroup.LayoutParams.WRAP_CONTENT,
+                                1f
+                            ).apply {
+                                if (column == 0)
+                                    rightMargin = dp(6)
+                                else
+                                    leftMargin = dp(6)
+
+                                bottomMargin = dp(12)
+                            }
+                        )
+
+                    } else {
+                        // Mantiene la larghezza della seconda colonna.
+                        row.addView(View(this), LinearLayout.LayoutParams(0, 1, 1f))
+                    }
+                }
+
+                mediaListContainer.addView(row)
+                index += 2
             }
+        } else {
+            // LISTA: visualizzazione precedente.
+            images.forEachIndexed { index, file ->
+                val card = createMediaCard(file, false)
 
-//            card.setOnClickListener {
-//
-//                if (file.isImage)
-//                    displayImage(device, file)
-//                else if (file.isVideo)
-//                    Toast.makeText(this, "Video selezionato: ${file.name}", Toast.LENGTH_SHORT).show()
-//            }
+                card.setOnClickListener { openMediaViewer(device, index) }
 
-            mediaListContainer.addView(
-                card,
-                LinearLayout.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT,
-                    ViewGroup.LayoutParams.WRAP_CONTENT
-                ).apply { bottomMargin = dp(12) }
-            )
+                mediaListContainer.addView(
+                    card,
+                    LinearLayout.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.WRAP_CONTENT
+                    ).apply { bottomMargin = dp(12) }
+                )
+            }
         }
     }
 
-    private fun createMediaCard(file: Fat32File): View {
-
+    private fun createMediaCard(file: Fat32File, gridMode: Boolean): View {
         val card = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            setPadding(dp(12), dp(12), dp(12), dp(12))
-            background = roundedBackground(CARD_COLOR, dp(16))
+            orientation = if (gridMode) LinearLayout.VERTICAL else LinearLayout.HORIZONTAL
+            gravity = if (gridMode) Gravity.TOP else Gravity.CENTER_VERTICAL
+
+            setPadding(
+                dp(if (gridMode) 8 else 12),
+                dp(if (gridMode) 8 else 12),
+                dp(if (gridMode) 8 else 12),
+                dp(if (gridMode) 8 else 12)
+            )
+
+            background = roundedBackground(CARD_COLOR, dp(18))
             elevation = dp(1).toFloat()
+
             isClickable = true
             isFocusable = true
         }
 
-        val thumbnail = LinearLayout(this).apply {
-            gravity = Gravity.CENTER
-            background = roundedBackground(
-                if (file.isVideo) {
-                    Color.rgb(235, 239, 247)
-                } else {
-                    Color.rgb(240, 242, 245)
-                },
-                dp(12)
-            )
+        val thumbnail = ImageView(this).apply {
+            scaleType = if (gridMode) ImageView.ScaleType.CENTER_CROP else ImageView.ScaleType.CENTER_CROP
 
-            layoutParams = LinearLayout.LayoutParams(
-                dp(66),
-                dp(66)
-            )
+            background = roundedBackground(CARD_SECONDARY, dp(13))
+            clipToOutline = true
+
+            val bitmap = thumbnailBitmaps[file.relativePath]
+
+            if (bitmap != null)
+                setImageBitmap(bitmap)
+            else {
+                setImageResource(android.R.drawable.ic_menu_gallery)
+                setColorFilter(TEXT_TERTIARY)
+            }
+
+            if (gridMode)
+                layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(150))
+            else
+                layoutParams = LinearLayout.LayoutParams(dp(66), dp(66))
         }
-
-        val icon = TextView(this).apply {
-            text = if (file.isVideo) "▶" else "▧"
-            textSize = 25f
-            setTextColor(
-                if (file.isVideo) {
-                    Color.rgb(75, 105, 160)
-                } else {
-                    Color.rgb(95, 105, 120)
-                }
-            )
-        }
-
-        thumbnail.addView(icon)
 
         val details = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(13), 0, 0, 0)
+
+            if (gridMode)
+                setPadding(0, dp(10), 0, dp(2))
+            else
+                setPadding(dp(13), 0, 0, 0)
         }
 
         val name = TextView(this).apply {
             text = file.name
-            textSize = 14f
+            textSize = if (gridMode) 15f else 14f
             setTypeface(null, Typeface.BOLD)
             setTextColor(TEXT_PRIMARY)
-            maxLines = 2
+            maxLines = 1
             ellipsize = android.text.TextUtils.TruncateAt.END
-        }
-
-        val type = TextView(this).apply {
-            text = if (file.isVideo) "VIDEO" else "FOTOGRAFIA"
-            textSize = 10f
-            setTypeface(null, Typeface.BOLD)
-            setTextColor(if (file.isVideo) FAILURE_COLOR else ACCENT_COLOR)
-            letterSpacing = 0.12f
-            setPadding(0, dp(4), 0, dp(2))
         }
 
         val path = TextView(this).apply {
             text = file.relativePath
             textSize = 11f
             setTextColor(TEXT_TERTIARY)
-            maxLines = 2
+            maxLines = if (gridMode) 1 else 2
             ellipsize = android.text.TextUtils.TruncateAt.MIDDLE
+            setPadding(0, dp(3), 0, 0)
         }
 
         val size = TextView(this).apply {
             text = formatFileSize(file.size)
             textSize = 11f
             setTextColor(AMBER_COLOR)
-            setPadding(0, dp(4), 0, 0)
+            setPadding(0, dp(5), 0, 0)
         }
 
         details.addView(name)
-        details.addView(type)
         details.addView(path)
         details.addView(size)
 
@@ -634,11 +710,18 @@ class MainActivity : AppCompatActivity() {
 
         card.addView(
             details,
-            LinearLayout.LayoutParams(
-                0,
-                ViewGroup.LayoutParams.WRAP_CONTENT,
-                1f
-            )
+            if (gridMode) {
+                LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT
+                )
+            } else {
+                LinearLayout.LayoutParams(
+                    0,
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                    1f
+                )
+            }
         )
 
         return card
@@ -647,7 +730,6 @@ class MainActivity : AppCompatActivity() {
     // ---------------------------------------------------------
     // ANTEPRIMA FOTOGRAFIE
     // ---------------------------------------------------------
-
     private fun displayImage(
         device: UsbDevice,
         file: Fat32File
@@ -778,7 +860,6 @@ class MainActivity : AppCompatActivity() {
     // ---------------------------------------------------------
     // UTILITÀ UI
     // ---------------------------------------------------------
-
     private fun sectionTitle(text: String): TextView {
 
         return TextView(this).apply {
@@ -822,6 +903,38 @@ class MainActivity : AppCompatActivity() {
                 "%.1f KB".format(size / 1024.0)
 
             else -> "$size byte"
+        }
+    }
+
+    private fun createModeButton(symbol: String, action: () -> Unit): TextView {
+        return TextView(this).apply {
+            text = symbol
+            textSize = 25f
+            gravity = Gravity.CENTER
+            setPadding(
+                dp(10),
+                dp(5),
+                dp(10),
+                dp(5)
+            )
+            isClickable = true
+            isFocusable = true
+
+            setOnClickListener { action() }
+        }
+    }
+
+    private fun updateGalleryModeButtons() {
+        listModeButton.apply {
+            setTextColor(if (!isGridView) Color.BLACK else TEXT_TERTIARY)
+
+            background = roundedBackground(if (!isGridView) ACCENT_COLOR else CARD_COLOR, dp(10))
+        }
+
+        gridModeButton.apply {
+            setTextColor(if (isGridView) Color.BLACK else TEXT_TERTIARY)
+
+            background = roundedBackground(if (isGridView) ACCENT_COLOR else CARD_COLOR, dp(10))
         }
     }
 
@@ -934,10 +1047,7 @@ class MainActivity : AppCompatActivity() {
         })
 
         // Lo swipe funziona sia sulle foto che sul video.
-        container.setOnTouchListener { _, event ->
-            gestureDetector.onTouchEvent(event)
-            true
-        }
+        container.setOnTouchListener { _, event -> gestureDetector.onTouchEvent(event) }
 
         showViewerItem(device, position)
     }
@@ -1066,19 +1176,11 @@ class MainActivity : AppCompatActivity() {
     }
 
 
-    private fun calculateSampleSize(
-        width: Int,
-        height: Int,
-        maxWidth: Int,
-        maxHeight: Int
-    ): Int {
-
+    private fun calculateSampleSize(width: Int, height: Int, maxWidth: Int, maxHeight: Int): Int {
         var sampleSize = 1
 
-        while (
-            width / (sampleSize * 2) >= maxWidth &&
-            height / (sampleSize * 2) >= maxHeight
-        ) {
+        while (width / (sampleSize * 2) > maxWidth ||
+               height / (sampleSize * 2) > maxHeight) {
             sampleSize *= 2
         }
 
@@ -1093,5 +1195,37 @@ class MainActivity : AppCompatActivity() {
         viewerImage = null
         viewerVideo = null
         viewerInfo = null
+    }
+
+    private fun decodeThumbnail(bytes: ByteArray): Bitmap? {
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+
+        BitmapFactory.decodeByteArray(
+            bytes,
+            0,
+            bytes.size,
+            bounds
+        )
+
+        if (bounds.outWidth <= 0 || bounds.outHeight <= 0)
+            return null
+
+        val options = BitmapFactory.Options().apply {
+            inSampleSize = calculateSampleSize(
+                bounds.outWidth,
+                bounds.outHeight,
+                450,
+                450
+            )
+
+            inPreferredConfig = Bitmap.Config.RGB_565
+        }
+
+        return BitmapFactory.decodeByteArray(
+            bytes,
+            0,
+            bytes.size,
+            options
+        )
     }
 }
