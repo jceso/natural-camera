@@ -1,5 +1,6 @@
 package com.example.naturalcam
 
+import android.R
 import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
@@ -44,6 +45,7 @@ import android.widget.MediaController
 import android.graphics.Bitmap
 import android.graphics.drawable.ColorDrawable
 import android.view.WindowManager
+import android.widget.ProgressBar
 import androidx.core.graphics.ColorUtils
 import java.io.File
 
@@ -425,8 +427,8 @@ class MainActivity : AppCompatActivity() {
         isLoading = true
         searchButton.isEnabled = false
 
-        updateMessage("Lettura della memoria della fotocamera...")
-        mediaListContainer.removeAllViews()
+        updateMessage("La Rollei sta preparando le fotografie...")
+        showGalleryLoading()
 
         lifecycleScope.launch {
             try {
@@ -526,18 +528,10 @@ class MainActivity : AppCompatActivity() {
                 updateMessage("${files.size} contenuti trovati · ${files.size} foto")
 
             } catch (e: Exception) {
+                mediaListContainer.removeAllViews()
 
-                updateMessage(
-                    "Errore durante la lettura: " +
-                            (e.message ?: e.javaClass.simpleName)
-                )
-
-                Toast.makeText(
-                    this@MainActivity,
-                    "Impossibile leggere la memoria della fotocamera",
-                    Toast.LENGTH_LONG
-                ).show()
-
+                updateMessage("Errore durante la lettura: " + (e.message ?: e.javaClass.simpleName))
+                Toast.makeText(this@MainActivity, "Impossibile leggere la memoria della fotocamera", Toast.LENGTH_LONG).show()
             } finally {
                 isLoading = false
                 searchButton.isEnabled = selectedDevice != null
@@ -548,6 +542,61 @@ class MainActivity : AppCompatActivity() {
     // ---------------------------------------------------------
     // GALLERIA
     // ---------------------------------------------------------
+    private fun showGalleryLoading() {
+        mediaListContainer.removeAllViews()
+
+        val loadingCard = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER
+            setPadding(dp(24), dp(30), dp(24), dp(30))
+            background = roundedBackground(CARD_SECONDARY, dp(18))
+        }
+
+        // Indicatore animato
+        val progress = ProgressBar(
+            this,
+            null,
+            R.attr.progressBarStyleLarge
+        ).apply {
+            isIndeterminate = true
+            indeterminateTintList =
+                android.content.res.ColorStateList.valueOf(ACCENT_COLOR)
+        }
+
+        loadingCard.addView(
+            progress,
+            LinearLayout.LayoutParams(dp(48), dp(48)).apply {
+                bottomMargin = dp(20)
+            }
+        )
+
+        val title = TextView(this).apply {
+            text = "Sviluppo dei ricordi..."
+            textSize = 17f
+            setTypeface(null, Typeface.BOLD)
+            setTextColor(TEXT_PRIMARY)
+            gravity = Gravity.CENTER
+        }
+
+        val description = TextView(this).apply {
+            text = "Sto leggendo le fotografie e preparando le anteprime."
+            textSize = 12f
+            setTextColor(TEXT_SECONDARY)
+            gravity = Gravity.CENTER
+            setPadding(0, dp(8), 0, 0)
+        }
+
+        loadingCard.addView(title)
+        loadingCard.addView(description)
+
+        mediaListContainer.addView(
+            loadingCard,
+            LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            )
+        )
+    }
 
     private fun displayMediaList(device: UsbDevice, files: List<Fat32File>) {
         mediaListContainer.removeAllViews()
