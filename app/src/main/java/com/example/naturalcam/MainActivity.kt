@@ -1,6 +1,5 @@
 package com.example.naturalcam
 
-import android.R
 import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
@@ -43,7 +42,6 @@ import android.widget.FrameLayout
 import android.widget.VideoView
 import android.widget.MediaController
 import android.graphics.Bitmap
-import android.graphics.drawable.ColorDrawable
 import android.view.WindowManager
 import android.widget.ProgressBar
 import androidx.core.graphics.ColorUtils
@@ -54,6 +52,9 @@ import kotlinx.coroutines.Job
 import java.io.File
 
 import android.widget.HorizontalScrollView
+import androidx.core.graphics.createBitmap
+import androidx.core.graphics.drawable.toDrawable
+import androidx.core.view.isVisible
 
 class MainActivity : AppCompatActivity() {
 
@@ -133,12 +134,12 @@ class MainActivity : AppCompatActivity() {
                 permissionRequestedDeviceId = null
                 autoScanDeviceId = device.deviceId
                 updateConnectionStatus(true)
-                statusDescription.text = "Fotocamera autorizzata. Ricerca dei contenuti..."
+                statusDescription.text = getString(R.string.status_permiss_success)
 
                 loadMedia(device)
             } else {
                 permissionRequestedDeviceId = null
-                statusDescription.text = "Autorizzazione USB negata. Premi AGGIORNA GALLERIA per riprovare."
+                statusDescription.text = getString(R.string.status_auth_failed)
 
                 updateMessage("Accesso alla fotocamera non autorizzato.")
             }
@@ -189,7 +190,7 @@ class MainActivity : AppCompatActivity() {
 
         // Intestazione
         val title = TextView(this).apply {
-            text = "Natural Camera"
+            text = getString(R.string.app_name)
             textSize = 29f
             setTextColor(TEXT_PRIMARY)
             setTypeface(null, Typeface.BOLD)
@@ -198,7 +199,7 @@ class MainActivity : AppCompatActivity() {
         root.addView(title)
 
         val subtitle = TextView(this).apply {
-            text = "La tua fotocamera, senza complicazioni."
+            text = getString(R.string.app_subtitle)
             textSize = 14f
             setTextColor(MUTED_CYAN)
         }
@@ -206,7 +207,7 @@ class MainActivity : AppCompatActivity() {
         root.addView(spacer(30))
 
         // Diagnostica USB
-        root.addView(sectionTitle("DIAGNOSTICA CONNESSIONE USB"))
+        root.addView(sectionTitle())
         root.addView(spacer(12))
 
         val connectionCard = LinearLayout(this).apply {
@@ -226,7 +227,7 @@ class MainActivity : AppCompatActivity() {
             setTextColor(ACCENT_COLOR)
         }
         statusText = TextView(this).apply {
-            text = "In attesa di connessione"
+            text = getString(R.string.conn_loading)
             textSize = 18f
             setTypeface(null, Typeface.BOLD)
             setTextColor(TEXT_SECONDARY)
@@ -237,7 +238,7 @@ class MainActivity : AppCompatActivity() {
 
         connectionCard.addView(connectionHeader)
         statusDescription = TextView(this).apply {
-            text = "Collega la Rollei tramite USB OTG."
+            text = getString(R.string.conn_loading_desc)
             textSize = 14f
             setTextColor(TEXT_TERTIARY)
             setPadding(0, dp(8), 0, 0)
@@ -248,7 +249,7 @@ class MainActivity : AppCompatActivity() {
 
         // Pulsante ricerca
         searchButton = Button(this).apply {
-            text = "AGGIORNA GALLERIA"
+            text = getString(R.string.update_button)
             textSize = 14f
             isAllCaps = false
             background = roundedBackground(ACCENT_COLOR, dp(14))
@@ -280,7 +281,7 @@ class MainActivity : AppCompatActivity() {
         // GALLERIA
         // ---------------------------------------------------------
         messageText = TextView(this).apply {
-            text = "Collega la fotocamera e cerca i tuoi contenuti."
+            text = getString(R.string.content_summary)
             textSize = 11f
             setTextColor(TEXT_SECONDARY)
         }
@@ -291,7 +292,7 @@ class MainActivity : AppCompatActivity() {
             gravity = Gravity.CENTER_VERTICAL
         }
         val galleryTitle = TextView(this).apply {
-            text = "Contenuti recenti"
+            text = getString(R.string.content_title)
             textSize = 23f
             setTypeface(null, Typeface.BOLD)
             setTextColor(TEXT_PRIMARY)
@@ -359,9 +360,7 @@ class MainActivity : AppCompatActivity() {
         val deviceId = rollei.deviceId
 
         if (usbManager.hasPermission(rollei)) {
-
-            statusDescription.text =
-                "Fotocamera collegata. Preparazione della galleria..."
+            statusDescription.text = getString(R.string.status_permiss_success)
 
             // Evita di avviare la stessa scansione più volte.
             if (autoScanDeviceId != deviceId) {
@@ -370,9 +369,7 @@ class MainActivity : AppCompatActivity() {
             }
 
         } else {
-
-            statusDescription.text =
-                "Richiesta autorizzazione per accedere alla fotocamera..."
+            statusDescription.text = getString(R.string.status_permiss_failed)
 
             // Chiediamo il permesso automaticamente una sola volta.
             if (permissionRequestedDeviceId != deviceId) {
@@ -384,12 +381,12 @@ class MainActivity : AppCompatActivity() {
 
     private fun updateConnectionStatus(connected: Boolean) {
         if (connected) {
-            statusText.text = "Rollei rilevata!"
-            statusDescription.text = "La fotocamera è collegata tramite USB OTG."
+            statusText.text = getString(R.string.status_conn_success)
+            statusDescription.text = getString(R.string.status_conn_detected)
             statusText.setTextColor(SUCCESS_COLOR)
         } else {
-            statusText.text = "Nessuna fotocamera rilevata"
-            statusDescription.text = "Collega la Rollei tramite USB OTG."
+            statusText.text = getString(R.string.status_conn_failed)
+            statusDescription.text = getString(R.string.conn_loading_desc)
             statusText.setTextColor(FAILURE_COLOR)
         }
     }
@@ -572,7 +569,7 @@ class MainActivity : AppCompatActivity() {
         val progress = ProgressBar(
             this,
             null,
-            R.attr.progressBarStyleLarge
+            android.R.attr.progressBarStyleLarge
         ).apply {
             isIndeterminate = true
             indeterminateTintList =
@@ -587,7 +584,7 @@ class MainActivity : AppCompatActivity() {
         )
 
         val title = TextView(this).apply {
-            text = "Sviluppo dei ricordi..."
+            text = getString(R.string.content_load_title)
             textSize = 17f
             setTypeface(null, Typeface.BOLD)
             setTextColor(TEXT_PRIMARY)
@@ -595,7 +592,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         val description = TextView(this).apply {
-            text = "Sto leggendo le fotografie e preparando le anteprime."
+            text = getString(R.string.content_load_desc)
             textSize = 12f
             setTextColor(TEXT_SECONDARY)
             gravity = Gravity.CENTER
@@ -622,7 +619,7 @@ class MainActivity : AppCompatActivity() {
         if (images.isEmpty()) {
             mediaListContainer.addView(
                 TextView(this).apply {
-                    text = "Nessuna fotografia trovata."
+                    text = getString(R.string.content_empty)
                     textSize = 14f
                     setTextColor(TEXT_SECONDARY)
                     gravity = Gravity.CENTER
@@ -770,10 +767,9 @@ class MainActivity : AppCompatActivity() {
     // ---------------------------------------------------------
     // UTILITÀ UI
     // ---------------------------------------------------------
-    private fun sectionTitle(text: String): TextView {
-
+    private fun sectionTitle(): TextView {
         return TextView(this).apply {
-            this.text = text
+            text = getString(R.string.conn_title)
             textSize = 11f
             setTypeface(null, Typeface.BOLD)
             setTextColor(Color.rgb(135, 141, 152))
@@ -984,7 +980,7 @@ class MainActivity : AppCompatActivity() {
         )
 
         // Foto + toggle, centrati nell'area elastica
-        val imageAndFilter = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        val imageAndFilter = GestureLinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         middleArea.addView(
             imageAndFilter,
             FrameLayout.LayoutParams(
@@ -1201,9 +1197,7 @@ class MainActivity : AppCompatActivity() {
 
         // LOOK: mostra/nasconde i profili colore
         val lookButton = createViewerAction("✦", "Profili colore") {
-            lookScrollView.visibility =
-                if (lookScrollView.visibility == View.VISIBLE) View.INVISIBLE
-                else View.VISIBLE
+            lookScrollView.isVisible = !lookScrollView.isVisible
         }
 
         // SALVA
@@ -1270,7 +1264,7 @@ class MainActivity : AppCompatActivity() {
         dialog.setCancelable(false)
 
         dialog.window?.apply {
-            setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
+            setBackgroundDrawable(Color.TRANSPARENT.toDrawable())
             setLayout(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT
@@ -1320,12 +1314,16 @@ class MainActivity : AppCompatActivity() {
         val gestureDetector = GestureDetector(
             this,
             object : GestureDetector.SimpleOnGestureListener() {
-
                 override fun onDown(e: MotionEvent): Boolean = true
+
+                override fun onSingleTapUp(e: MotionEvent): Boolean {
+                    imageAndFilter.performClick()
+                    return true
+                }
 
                 override fun onFling(e1: MotionEvent?, e2: MotionEvent, velocityX: Float, velocityY: Float): Boolean {
                     // Con i preset aperti, gli swipe non cambiano la foto.
-                    if (lookScrollView.visibility == View.VISIBLE)
+                    if (lookScrollView.isVisible)
                         return false
 
                     val start = e1 ?: return false
@@ -1409,7 +1407,7 @@ class MainActivity : AppCompatActivity() {
         viewerImage?.visibility = View.GONE
         viewerImage?.setImageDrawable(null)
 
-        viewerInfo?.text = "${file.name}\n${position + 1} / ${mediaFiles.size}"
+        viewerInfo?.text = getString(R.string.content_summary_count, file.name, position + 1, mediaFiles.size)
 
         viewerLoadJob = lifecycleScope.launch {
             try {
@@ -1709,7 +1707,7 @@ class MainActivity : AppCompatActivity() {
                 return source
             }
             return source.copy(Bitmap.Config.ARGB_8888, false)
-                ?: throw java.io.IOException("Impossibile leggere l'immagine")
+                ?: throw IOException("Impossibile leggere l'immagine")
         }
 
         val width = drawable.intrinsicWidth.takeIf { it > 0 }
@@ -1717,7 +1715,7 @@ class MainActivity : AppCompatActivity() {
         val height = drawable.intrinsicHeight.takeIf { it > 0 }
             ?: fallbackHeight.coerceAtLeast(1)
 
-        return Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888).also { bitmap ->
+        return createBitmap(width, height).also { bitmap ->
             val canvas = android.graphics.Canvas(bitmap)
             drawable.setBounds(0, 0, width, height)
             drawable.draw(canvas)
@@ -1732,5 +1730,14 @@ private class SquareCardLayout(context: Context) : FrameLayout(context) {
         val width = MeasureSpec.getSize(widthMeasureSpec)
         val squareSpec = MeasureSpec.makeMeasureSpec(width, MeasureSpec.EXACTLY)
         super.onMeasure(widthMeasureSpec, squareSpec)
+    }
+}
+
+private class GestureLinearLayout(context: Context) : LinearLayout(context) {
+    init { isClickable = true }
+
+    override fun performClick(): Boolean {
+        super.performClick()
+        return true
     }
 }
