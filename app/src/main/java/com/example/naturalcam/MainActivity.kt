@@ -265,7 +265,6 @@ class MainActivity : AppCompatActivity() {
             setTextColor(TEXT_SECONDARY)
         }
         root.addView(messageText)
-        root.addView(spacer(12))
 
         val galleryHeader = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -273,7 +272,7 @@ class MainActivity : AppCompatActivity() {
         }
         val galleryTitle = TextView(this).apply {
             text = "Contenuti recenti"
-            textSize = 21f
+            textSize = 23f
             setTypeface(null, Typeface.BOLD)
             setTextColor(TEXT_PRIMARY)
         }
@@ -581,7 +580,7 @@ class MainActivity : AppCompatActivity() {
 
                     if (currentIndex < images.size) {
                         val file = images[currentIndex]
-                        val card = createMediaCard(file, true)
+                        val card = createGridMediaCard(file, thumbnailBitmaps[file.relativePath])
 
                         card.setOnClickListener { openMediaViewer(device, currentIndex) }
 
@@ -613,7 +612,7 @@ class MainActivity : AppCompatActivity() {
         } else {
             // LISTA: visualizzazione precedente.
             images.forEachIndexed { index, file ->
-                val card = createMediaCard(file, false)
+                val card = createMediaCard(file)
 
                 card.setOnClickListener { openMediaViewer(device, index) }
 
@@ -628,28 +627,20 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun createMediaCard(file: Fat32File, gridMode: Boolean): View {
+    private fun createMediaCard(file: Fat32File): View {
         val card = LinearLayout(this).apply {
-            orientation = if (gridMode) LinearLayout.VERTICAL else LinearLayout.HORIZONTAL
-            gravity = if (gridMode) Gravity.TOP else Gravity.CENTER_VERTICAL
-
-            setPadding(
-                dp(if (gridMode) 8 else 12),
-                dp(if (gridMode) 8 else 12),
-                dp(if (gridMode) 8 else 12),
-                dp(if (gridMode) 8 else 12)
-            )
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(12), dp(12), dp(12), dp( 12))
 
             background = roundedBackground(CARD_COLOR, dp(18))
             elevation = dp(1).toFloat()
-
             isClickable = true
             isFocusable = true
         }
 
         val thumbnail = ImageView(this).apply {
-            scaleType = if (gridMode) ImageView.ScaleType.CENTER_CROP else ImageView.ScaleType.CENTER_CROP
-
+            scaleType = ImageView.ScaleType.CENTER_CROP
             background = roundedBackground(CARD_SECONDARY, dp(13))
             clipToOutline = true
 
@@ -662,24 +653,17 @@ class MainActivity : AppCompatActivity() {
                 setColorFilter(TEXT_TERTIARY)
             }
 
-            if (gridMode)
-                layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(150))
-            else
-                layoutParams = LinearLayout.LayoutParams(dp(66), dp(66))
+            layoutParams = LinearLayout.LayoutParams(dp(66), dp(66))
         }
 
         val details = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-
-            if (gridMode)
-                setPadding(0, dp(10), 0, dp(2))
-            else
-                setPadding(dp(13), 0, 0, 0)
+            setPadding(dp(13), 0, 0, 0)
         }
 
         val name = TextView(this).apply {
             text = file.name
-            textSize = if (gridMode) 15f else 14f
+            textSize = 14f
             setTypeface(null, Typeface.BOLD)
             setTextColor(TEXT_PRIMARY)
             maxLines = 1
@@ -690,7 +674,7 @@ class MainActivity : AppCompatActivity() {
             text = file.relativePath
             textSize = 11f
             setTextColor(TEXT_TERTIARY)
-            maxLines = if (gridMode) 1 else 2
+            maxLines = 2
             ellipsize = android.text.TextUtils.TruncateAt.MIDDLE
             setPadding(0, dp(3), 0, 0)
         }
@@ -710,151 +694,10 @@ class MainActivity : AppCompatActivity() {
 
         card.addView(
             details,
-            if (gridMode) {
-                LinearLayout.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT,
-                    ViewGroup.LayoutParams.WRAP_CONTENT
-                )
-            } else {
-                LinearLayout.LayoutParams(
-                    0,
-                    ViewGroup.LayoutParams.WRAP_CONTENT,
-                    1f
-                )
-            }
+            LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
         )
 
         return card
-    }
-
-    // ---------------------------------------------------------
-    // ANTEPRIMA FOTOGRAFIE
-    // ---------------------------------------------------------
-    private fun displayImage(
-        device: UsbDevice,
-        file: Fat32File
-    ) {
-
-        updateMessage("Caricamento ${file.name}...")
-
-        lifecycleScope.launch {
-
-            try {
-
-                val imageBytes = withContext(Dispatchers.IO) {
-
-                    if (!usbManager.hasPermission(device)) {
-                        throw IOException("Permesso USB non disponibile")
-                    }
-
-                    val usbInterface = device.getInterface(0)
-
-                    val endpoints = (0 until usbInterface.endpointCount)
-                        .map { usbInterface.getEndpoint(it) }
-
-                    val bulkIn = endpoints.firstOrNull {
-                        it.type == UsbConstants.USB_ENDPOINT_XFER_BULK &&
-                                it.direction == UsbConstants.USB_DIR_IN
-                    } ?: throw IOException("Endpoint Bulk IN non trovato")
-
-                    val bulkOut = endpoints.firstOrNull {
-                        it.type == UsbConstants.USB_ENDPOINT_XFER_BULK &&
-                                it.direction == UsbConstants.USB_DIR_OUT
-                    } ?: throw IOException("Endpoint Bulk OUT non trovato")
-
-                    val connection = usbManager.openDevice(device)
-                        ?: throw IOException("Impossibile aprire la Rollei")
-
-                    try {
-
-                        if (!connection.claimInterface(usbInterface, true)) {
-                            throw IOException("Interfaccia USB non disponibile")
-                        }
-
-                        try {
-
-                            val transport = MassStorageTransport(
-                                connection,
-                                bulkIn,
-                                bulkOut
-                            )
-
-                            val mbr = transport.readSectors(0, 1)
-
-                            if (!mbr.successful || mbr.data.size != 512) {
-                                throw IOException("Impossibile leggere MBR")
-                            }
-
-                            val partition = MbrParser.parse(mbr.data)
-                                .firstOrNull()
-                                ?: throw IOException("Partizione non trovata")
-
-                            val reader = Fat32Reader(
-                                transport,
-                                partition.startLba
-                            )
-
-                            reader.readFile(file)
-
-                        } finally {
-                            connection.releaseInterface(usbInterface)
-                        }
-
-                    } finally {
-                        connection.close()
-                    }
-                }
-
-                val bitmap = BitmapFactory.decodeByteArray(
-                    imageBytes,
-                    0,
-                    imageBytes.size
-                ) ?: throw IOException("Formato immagine non supportato")
-
-                showImageDialog(file, bitmap)
-
-                updateMessage("Fotografia aperta: ${file.name}")
-
-            } catch (e: Exception) {
-
-                updateMessage(
-                    "Errore apertura fotografia: " +
-                            (e.message ?: e.javaClass.simpleName)
-                )
-            }
-        }
-    }
-
-    private fun showImageDialog(
-        file: Fat32File,
-        bitmap: android.graphics.Bitmap
-    ) {
-
-        val imageView = ImageView(this).apply {
-            setImageBitmap(bitmap)
-            adjustViewBounds = true
-            scaleType = ImageView.ScaleType.FIT_CENTER
-            setBackgroundColor(Color.BLACK)
-            setPadding(dp(4), dp(4), dp(4), dp(4))
-        }
-
-        val container = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setBackgroundColor(Color.BLACK)
-            addView(
-                imageView,
-                LinearLayout.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT,
-                    dp(420)
-                )
-            )
-        }
-
-        AlertDialog.Builder(this)
-            .setTitle(file.name)
-            .setView(container)
-            .setPositiveButton("Chiudi", null)
-            .show()
     }
 
     // ---------------------------------------------------------
@@ -872,20 +715,12 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun spacer(height: Int): View {
-
         return View(this).apply {
-            layoutParams = LinearLayout.LayoutParams(
-                1,
-                dp(height)
-            )
+            layoutParams = LinearLayout.LayoutParams(1, dp(height))
         }
     }
 
-    private fun roundedBackground(
-        color: Int,
-        radius: Int
-    ): GradientDrawable {
-
+    private fun roundedBackground(color: Int, radius: Int): GradientDrawable {
         return GradientDrawable().apply {
             setColor(color)
             cornerRadius = radius.toFloat()
@@ -894,14 +729,9 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun formatFileSize(size: Long): String {
-
         return when {
-            size >= 1024L * 1024L ->
-                "%.2f MB".format(size / (1024.0 * 1024.0))
-
-            size >= 1024L ->
-                "%.1f KB".format(size / 1024.0)
-
+            size >= 1024L * 1024L -> "%.2f MB".format(size / (1024.0 * 1024.0))
+            size >= 1024L -> "%.1f KB".format(size / 1024.0)
             else -> "$size byte"
         }
     }
@@ -911,18 +741,90 @@ class MainActivity : AppCompatActivity() {
             text = symbol
             textSize = 25f
             gravity = Gravity.CENTER
-            setPadding(
-                dp(10),
-                dp(5),
-                dp(10),
-                dp(5)
-            )
+            setPadding(dp(10), dp(5), dp(10), dp(5))
             isClickable = true
             isFocusable = true
 
             setOnClickListener { action() }
         }
     }
+
+    private fun createGridMediaCard(file: Fat32File, preview: Bitmap?): View {
+        val card = SquareCardLayout(this).apply {
+            background = roundedBackground(CARD_COLOR, dp(18))
+            clipToOutline = true
+            elevation = dp(2).toFloat()
+            isClickable = true
+            isFocusable = true
+        }
+
+        val content = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(10), dp(10), dp(10), dp(10))
+        }
+
+        // Anteprima: occupa tutto lo spazio verticale disponibile.
+        val thumbnail = ImageView(this).apply {
+            scaleType = ImageView.ScaleType.CENTER_CROP
+            setBackgroundColor(CARD_SECONDARY)
+
+            if (preview != null)
+                setImageBitmap(preview)
+            else {
+                setImageResource(android.R.drawable.ic_menu_gallery)
+                setColorFilter(TEXT_TERTIARY)
+                scaleType = ImageView.ScaleType.CENTER
+            }
+
+            clipToOutline = true
+            background = roundedBackground(CARD_SECONDARY, dp(12))
+        }
+
+        content.addView(
+            thumbnail,
+            LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f)
+                                 .apply { bottomMargin = dp(9) }
+        )
+
+        // Nome file: stessa dimensione della modalità elenco.
+        val name = TextView(this).apply {
+            text = file.name
+            textSize = 14f
+            setTypeface(null, Typeface.BOLD)
+            setTextColor(TEXT_PRIMARY)
+            maxLines = 1
+            ellipsize = android.text.TextUtils.TruncateAt.END
+        }
+
+        // Percorso: stessa dimensione della modalità elenco.
+        val path = TextView(this).apply {
+            text = file.relativePath
+            textSize = 11f
+            setTextColor(TEXT_TERTIARY)
+            maxLines = 1
+            ellipsize = android.text.TextUtils.TruncateAt.MIDDLE
+        }
+
+        // Dimensione: stessa dimensione della modalità elenco.
+        val size = TextView(this).apply {
+            text = formatFileSize(file.size)
+            textSize = 11f
+            setTextColor(AMBER_COLOR)
+            setPadding(0, dp(3), 0, 0)
+        }
+
+        content.addView(name)
+        content.addView(path)
+        content.addView(size)
+
+        card.addView(
+            content,
+            FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+        )
+
+        return card
+    }
+
 
     private fun updateGalleryModeButtons() {
         listModeButton.apply {
@@ -1020,30 +922,30 @@ class MainActivity : AppCompatActivity() {
         )
 
         val gestureDetector = GestureDetector(this, object : GestureDetector.SimpleOnGestureListener() {
-                override fun onDown(e: MotionEvent): Boolean = true
+            override fun onDown(e: MotionEvent): Boolean = true
 
-                override fun onFling(e1: MotionEvent?,
-                                     e2: MotionEvent,
-                                     velocityX: Float,
-                                     velocityY: Float): Boolean {
-                    val start = e1 ?: return false
+            override fun onFling(e1: MotionEvent?,
+                                 e2: MotionEvent,
+                                 velocityX: Float,
+                                 velocityY: Float): Boolean {
+                val start = e1 ?: return false
 
-                    val deltaX = e2.x - start.x
-                    val deltaY = e2.y - start.y
+                val deltaX = e2.x - start.x
+                val deltaY = e2.y - start.y
 
-                    if (kotlin.math.abs(deltaX) > dp(70) &&
-                        kotlin.math.abs(deltaX) > kotlin.math.abs(deltaY) &&
-                        kotlin.math.abs(velocityX) > dp(100)) {
-                            if (deltaX < 0)
-                                showViewerItem(device, viewerPosition + 1)
-                            else
-                                showViewerItem(device, viewerPosition - 1)
+                if (kotlin.math.abs(deltaX) > dp(70) &&
+                    kotlin.math.abs(deltaX) > kotlin.math.abs(deltaY) &&
+                    kotlin.math.abs(velocityX) > dp(100)) {
+                    if (deltaX < 0)
+                        showViewerItem(device, viewerPosition + 1)
+                    else
+                        showViewerItem(device, viewerPosition - 1)
 
-                            return true
-                    }
-
-                    return false
+                    return true
                 }
+
+                return false
+            }
         })
 
         // Lo swipe funziona sia sulle foto che sul video.
@@ -1065,7 +967,7 @@ class MainActivity : AppCompatActivity() {
         viewerImage?.setImageDrawable(null)
 
         viewerInfo?.text = "${file.name}\n${file.relativePath}\n" +
-                           "${position + 1} / ${mediaFiles.size}"
+                "${position + 1} / ${mediaFiles.size}"
 
         lifecycleScope.launch {
 
@@ -1180,7 +1082,7 @@ class MainActivity : AppCompatActivity() {
         var sampleSize = 1
 
         while (width / (sampleSize * 2) > maxWidth ||
-               height / (sampleSize * 2) > maxHeight) {
+            height / (sampleSize * 2) > maxHeight) {
             sampleSize *= 2
         }
 
@@ -1227,5 +1129,15 @@ class MainActivity : AppCompatActivity() {
             bytes.size,
             options
         )
+    }
+}
+
+
+// Square card class
+private class SquareCardLayout(context: Context) : FrameLayout(context) {
+    override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+        val width = MeasureSpec.getSize(widthMeasureSpec)
+        val squareSpec = MeasureSpec.makeMeasureSpec(width, MeasureSpec.EXACTLY)
+        super.onMeasure(widthMeasureSpec, squareSpec)
     }
 }
