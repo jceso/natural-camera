@@ -53,6 +53,8 @@ import com.example.naturalcam.photoProcessing.VibranceProcessor
 import kotlinx.coroutines.Job
 import java.io.File
 
+import android.widget.HorizontalScrollView
+
 class MainActivity : AppCompatActivity() {
 
     companion object {
@@ -1069,11 +1071,23 @@ class MainActivity : AppCompatActivity() {
         // -----------------------------------------------------
         // CHIP PROFILI COLORE
         // -----------------------------------------------------
-        val lookChips = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.START or Gravity.CENTER_VERTICAL
+        val lookScrollView = HorizontalScrollView(this).apply {
+            isHorizontalScrollBarEnabled = false
+            overScrollMode = View.OVER_SCROLL_NEVER
             visibility = View.INVISIBLE
         }
+        val lookChips = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        lookScrollView.addView(
+            lookChips,
+            ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                ViewGroup.LayoutParams.MATCH_PARENT
+            )
+        )
+
         val presetChips = mutableListOf<Pair<TextView, ColorPreset>>()
 
         fun updateLookChipStyles() {
@@ -1127,11 +1141,36 @@ class MainActivity : AppCompatActivity() {
             LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(34))
                                  .apply { marginEnd = dp(8) }
         )
+        lookChips.addView(
+            createLookChip("RETRO", ColorPresets.retro),
+            LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(34))
+                                 .apply { marginEnd = dp(8) }
+        )
+        lookChips.addView(
+            createLookChip("POP", ColorPresets.pop),
+            LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(34))
+                .apply { marginEnd = dp(8) }
+        )
+        lookChips.addView(
+            createLookChip("GOLDEN", ColorPresets.goldenHour),
+            LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(34))
+                .apply { marginEnd = dp(8) }
+        )
+        lookChips.addView(
+            createLookChip("ARCTIC", ColorPresets.arctic),
+            LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(34))
+                .apply { marginEnd = dp(8) }
+        )
+        lookChips.addView(
+            createLookChip("CREEPY", ColorPresets.analogHorror),
+            LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(34))
+                .apply { marginEnd = dp(8) }
+        )
 
         updateLookChipStyles()
 
         bottomPanel.addView(
-            lookChips,
+            lookScrollView,
             LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(42))
         )
 
@@ -1162,8 +1201,8 @@ class MainActivity : AppCompatActivity() {
 
         // LOOK: mostra/nasconde i profili colore
         val lookButton = createViewerAction("✦", "Profili colore") {
-            lookChips.visibility =
-                if (lookChips.visibility == View.VISIBLE) View.INVISIBLE
+            lookScrollView.visibility =
+                if (lookScrollView.visibility == View.VISIBLE) View.INVISIBLE
                 else View.VISIBLE
         }
 
@@ -1284,12 +1323,10 @@ class MainActivity : AppCompatActivity() {
 
                 override fun onDown(e: MotionEvent): Boolean = true
 
-                override fun onFling(
-                    e1: MotionEvent?,
-                    e2: MotionEvent,
-                    velocityX: Float,
-                    velocityY: Float
-                ): Boolean {
+                override fun onFling(e1: MotionEvent?, e2: MotionEvent, velocityX: Float, velocityY: Float): Boolean {
+                    // Con i preset aperti, gli swipe non cambiano la foto.
+                    if (lookScrollView.visibility == View.VISIBLE)
+                        return false
 
                     val start = e1 ?: return false
 

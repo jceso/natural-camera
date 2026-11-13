@@ -17,21 +17,16 @@ data class ColorPreset(
 object ColorPresets {
     val natural = ColorPreset(
         id = "natural",
-        name = "Naturale"
-    )
-
-    val vivid = ColorPreset(
-        id = "vivid",
-        name = "Vivace",
+        name = "Natural",
         exposureEv = -0.10f,
         contrast = 1.06f,
         saturation = 1.06f,
         vibrance = 0.30f
     )
 
-    val vividExtra = ColorPreset(
+    val vivid = ColorPreset(
         id = "vivid",
-        name = "Vivace - test",
+        name = "Vivace",
         exposureEv = 0.25f,
         contrast = 1.45f,
         saturation = 2.2f,
@@ -47,7 +42,85 @@ object ColorPresets {
         vibrance = 0f
     )
 
-    val all = listOf(natural, vivid)
+    val goldenHour = ColorPreset(
+        id = "golden-hour",
+        name = "Golden Hour",
+        exposureEv = 0.05f,
+        contrast = 1.08f,
+        saturation = 1.18f,
+        vibrance = 0.25f,
+        warmth = 0.55f
+    )
+
+    val arctic = ColorPreset(
+        id = "arctic",
+        name = "Artico",
+        exposureEv = 0.05f,
+        contrast = 1.08f,
+        saturation = 1.12f,
+        vibrance = 0.25f,
+        warmth = -0.55f
+    )
+
+    val retro = ColorPreset(
+        id = "retro",
+        name = "Retro",
+        exposureEv = 0.02f,
+        contrast = 0.92f,
+        saturation = 0.78f,
+        vibrance = 0.10f,
+        warmth = 0.35f
+    )
+
+    val dreamy = ColorPreset(
+        id = "dreamy",
+        name = "Sognante",
+        exposureEv = 0.12f,
+        contrast = 0.88f,
+        saturation = 0.92f,
+        vibrance = 0.15f,
+        warmth = 0.12f
+    )
+
+    val pop = ColorPreset(
+        id = "pop",
+        name = "Pop",
+        exposureEv = 0.02f,
+        contrast = 1.25f,
+        saturation = 1.40f,
+        vibrance = 0.65f
+    )
+
+    val noir = ColorPreset(
+        id = "noir",
+        name = "Noir",
+        exposureEv = -0.08f,
+        contrast = 1.45f,
+        saturation = 0f
+    )
+
+    val analogHorror = ColorPreset(
+        id = "analog-horror",
+        name = "Analog Horror",
+        exposureEv = -0.20f,
+        contrast = 1.45f,
+        saturation = 0.45f,
+        vibrance = 0.20f,
+        warmth = -1.25f
+    )
+
+    val all = listOf(
+        natural,
+        vivid,
+        blackAndWhite,
+        goldenHour,
+        arctic,
+        retro,
+        dreamy,
+        pop,
+        noir,
+        analogHorror
+    )
 }
 
 object VibranceProcessor {
