@@ -22,6 +22,8 @@
     <string name="conn_loading_desc">Collega la Rollei tramite USB OTG</string>
 
     <string name="update_button">AGGIORNA GALLERIA</string>
+    <string name="gallery_list_mode">Visualizzazione elenco</string>
+    <string name="gallery_grid_mode">Visualizzazione griglia</string>
 
     <string name="content_summary">Collega la fotocamera e cerca i tuoi contenuti</string>
     <string name="content_summary_count">%1$s\n%2$d / %3$d</string>
@@ -29,4 +31,12 @@
     <string name="content_load_title">Sviluppo dei ricordi…</string>
     <string name="content_load_desc">Sto leggendo le fotografie e preparando le anteprime</string>
     <string name="content_empty">Nessuna fotografia trovata</string>
+
+    <!-- MEDIA VIEWER -->
+    <string name="viewer_close">Chiudi visualizzatore</string>
+    <string name="viewer_filter_toggle">Attiva o disattiva il preset</string>
+    <string name="viewer_adjust">Regola immagine</string>
+    <string name="viewer_save">Salva immagine</string>
+    <string name="viewer_share">Condividi immagine</string>
+    <string name="viewer_looks">Mostra preset colore</string>
 </resources>

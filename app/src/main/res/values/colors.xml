@@ -1,5 +1,25 @@
-<?xml version="1.0" encoding="utf-8"?>
 <resources>
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
+    <color name="bg_viewer">#B3000000</color>
+
+    <color name="gallery_mode_text_selected">#FF000000</color>
+    <color name="gallery_mode_text_unselected">#FF708091</color>
+
+    <color name="bg_color">#FF0B0D14</color>
+    <color name="card_color">#FF151925</color>
+    <color name="card_secondary">#FF1B2130</color>
+
+    <color name="text_primary">#FFEEEBDE</color>
+    <color name="text_secondary">#FF9EA9B5</color>
+    <color name="text_tertiary">#FF708091</color>
+
+    <color name="accent_color">#FF5AD2E6</color>
+    <color name="success_color">#FF45F3AA</color>
+    <color name="failure_color">#FFFF4FA3</color>
+
+    <color name="amber_color">#FFF6C177</color>
+    <color name="muted_cyan">#FF85C3BE</color>
+
+    2D5AD2E6
 </resources>

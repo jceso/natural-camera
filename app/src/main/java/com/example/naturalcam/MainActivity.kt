@@ -7,20 +7,17 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.graphics.BitmapFactory
 import android.graphics.Color
-import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.hardware.usb.UsbConstants
 import android.hardware.usb.UsbDevice
 import android.hardware.usb.UsbManager
 import android.os.Build
 import android.os.Bundle
-import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
 import android.widget.Button
 import android.widget.ImageView
 import android.widget.LinearLayout
-import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
@@ -55,6 +52,9 @@ import android.widget.HorizontalScrollView
 import androidx.core.graphics.createBitmap
 import androidx.core.graphics.drawable.toDrawable
 import androidx.core.view.isVisible
+import android.util.AttributeSet
+import android.widget.GridLayout
+import android.widget.ImageButton
 
 class MainActivity : AppCompatActivity() {
 
@@ -63,25 +63,9 @@ class MainActivity : AppCompatActivity() {
 
         private const val ROLLEI_VENDOR_ID = 0x1B3F
         private const val ROLLEI_PRODUCT_ID = 0x8301
-
-        private val BG_COLOR = Color.rgb(11, 13, 20)
-        private val CARD_COLOR = Color.rgb(21, 25, 37)
-        private val CARD_SECONDARY = Color.rgb(27, 33, 48)
-
-        private val TEXT_PRIMARY = Color.rgb(238, 235, 222)
-        private val TEXT_SECONDARY = Color.rgb(158, 169, 181)
-        private val TEXT_TERTIARY = Color.rgb(112, 128, 145)
-
-        //private val ACCENT_COLOR = Color.rgb(69, 243, 224)    // ciano neon
-        //private val ACCENT_COLOR = Color.rgb(95, 231, 255)    //Prima versione
-        private val ACCENT_COLOR = Color.rgb(90, 210, 230)    //Vintage display
-        //private val ACCENT_COLOR = Color.rgb(108, 220, 255)
-        private val SUCCESS_COLOR = Color.rgb(69, 243, 170)
-        private val FAILURE_COLOR = Color.rgb(255, 79, 163) // magenta neon
-
-        private val AMBER_COLOR = Color.rgb(246, 193, 119)
-        private val MUTED_CYAN = Color.rgb(133, 195, 190)
     }
+
+    private val accentColor get() = ContextCompat.getColor(this, R.color.accent_color)
 
     private lateinit var usbManager: UsbManager
 
@@ -89,7 +73,9 @@ class MainActivity : AppCompatActivity() {
     private lateinit var statusDescription: TextView
     private lateinit var searchButton: Button
     private lateinit var messageText: TextView
-    private lateinit var mediaListContainer: LinearLayout
+    private lateinit var mediaListContainer: GridLayout
+    private lateinit var galleryLoading: ProgressBar
+    private lateinit var galleryEmpty: TextView
 
     private var selectedDevice: UsbDevice? = null
     private var receiverRegistered = false
@@ -98,8 +84,8 @@ class MainActivity : AppCompatActivity() {
     private var mediaFiles: List<Fat32File> = emptyList()
     private var isGridView = true
     private var thumbnailBitmaps: Map<String, Bitmap> = emptyMap()
-    private lateinit var listModeButton: TextView
-    private lateinit var gridModeButton: TextView
+    private lateinit var listModeButton: ImageButton
+    private lateinit var gridModeButton: ImageButton
     private var blurredContentView: View? = null
 
     private var autoScanDeviceId: Int? = null
@@ -178,84 +164,25 @@ class MainActivity : AppCompatActivity() {
     // ---------------------------------------------------------
 
     private fun createInterface() {
-        val root = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(dp(20), dp(48), dp(20), dp(32))
-            setBackgroundColor(BG_COLOR)
-        }
-        val scrollView = ScrollView(this).apply {
-            isFillViewport = true
-            addView(root)
-        }
+        setContentView(R.layout.activity_main)
 
-        // Intestazione
-        val title = TextView(this).apply {
-            text = getString(R.string.app_name)
-            textSize = 29f
-            setTextColor(TEXT_PRIMARY)
-            setTypeface(null, Typeface.BOLD)
-            letterSpacing = 0.04f
-        }
-        root.addView(title)
+        statusText = findViewById(R.id.statusText)
+        statusDescription = findViewById(R.id.statusDescription)
+        searchButton = findViewById(R.id.searchButton)
+        messageText = findViewById(R.id.messageText)
+        listModeButton = findViewById(R.id.listModeButton)
+        gridModeButton = findViewById(R.id.gridModeButton)
 
-        val subtitle = TextView(this).apply {
-            text = getString(R.string.app_subtitle)
-            textSize = 14f
-            setTextColor(MUTED_CYAN)
-        }
-        root.addView(subtitle)
-        root.addView(spacer(30))
+        mediaListContainer = findViewById(R.id.mediaListContainer)
+        galleryLoading = findViewById(R.id.galleryLoading)
+        galleryEmpty = findViewById(R.id.galleryEmpty)
 
-        // Diagnostica USB
-        root.addView(sectionTitle())
-        root.addView(spacer(12))
-
-        val connectionCard = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(dp(18), dp(18), dp(18), dp(18))
-            background = roundedBackground(CARD_SECONDARY, dp(18))
+        findViewById<LinearLayout>(R.id.connectionCard).apply {
             elevation = dp(2).toFloat()
         }
 
-        val connectionHeader = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-        }
-        val connectionIndicator = TextView(this).apply {
-            text = "●"
-            textSize = 16f
-            setTextColor(ACCENT_COLOR)
-        }
-        statusText = TextView(this).apply {
-            text = getString(R.string.conn_loading)
-            textSize = 18f
-            setTypeface(null, Typeface.BOLD)
-            setTextColor(TEXT_SECONDARY)
-            setPadding(dp(10), 0, 0, 0)
-        }
-        connectionHeader.addView(connectionIndicator)
-        connectionHeader.addView(statusText)
-
-        connectionCard.addView(connectionHeader)
-        statusDescription = TextView(this).apply {
-            text = getString(R.string.conn_loading_desc)
-            textSize = 14f
-            setTextColor(TEXT_TERTIARY)
-            setPadding(0, dp(8), 0, 0)
-        }
-        connectionCard.addView(statusDescription)
-        root.addView(connectionCard)
-        root.addView(spacer(16))
-
-        // Pulsante ricerca
-        searchButton = Button(this).apply {
-            text = getString(R.string.update_button)
-            textSize = 14f
-            isAllCaps = false
-            background = roundedBackground(ACCENT_COLOR, dp(14))
+        searchButton.apply {
             setTextColor(Color.BLACK)
-            setPadding(dp(16), dp(12), dp(16), dp(12))
-            isEnabled = false
 
             setOnClickListener {
                 val device = selectedDevice
@@ -265,68 +192,27 @@ class MainActivity : AppCompatActivity() {
                     return@setOnClickListener
                 }
 
-                if (usbManager.hasPermission(device))
+                if (usbManager.hasPermission(device)) {
                     loadMedia(device)
-                else
+                } else {
                     requestUsbPermission(device)
+                }
             }
         }
-        root.addView(
-            searchButton,
-            LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(58))
-        )
-        root.addView(spacer(28))
 
-        // ---------------------------------------------------------
-        // GALLERIA
-        // ---------------------------------------------------------
-        messageText = TextView(this).apply {
-            text = getString(R.string.content_summary)
-            textSize = 11f
-            setTextColor(TEXT_SECONDARY)
-        }
-        root.addView(messageText)
-
-        val galleryHeader = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-        }
-        val galleryTitle = TextView(this).apply {
-            text = getString(R.string.content_title)
-            textSize = 23f
-            setTypeface(null, Typeface.BOLD)
-            setTextColor(TEXT_PRIMARY)
-        }
-        galleryHeader.addView(
-            galleryTitle,
-            LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
-        )
-
-        // Pulsante modalità lista/griglia
-        listModeButton = createModeButton("☷") {
+        listModeButton.setOnClickListener {
             isGridView = false
             updateGalleryModeButtons()
-
             selectedDevice?.let { displayMediaList(it, mediaFiles) }
         }
-        gridModeButton = createModeButton("▦") {
+
+        gridModeButton.setOnClickListener {
             isGridView = true
             updateGalleryModeButtons()
-
             selectedDevice?.let { displayMediaList(it, mediaFiles) }
         }
-        galleryHeader.addView(listModeButton)
-        galleryHeader.addView(spacer(8))
-        galleryHeader.addView(gridModeButton)
 
-        root.addView(galleryHeader)
         updateGalleryModeButtons()
-        root.addView(spacer(16))
-
-        mediaListContainer = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        root.addView(mediaListContainer)
-
-        setContentView(scrollView)
     }
 
     // ---------------------------------------------------------
@@ -383,11 +269,11 @@ class MainActivity : AppCompatActivity() {
         if (connected) {
             statusText.text = getString(R.string.status_conn_success)
             statusDescription.text = getString(R.string.status_conn_detected)
-            statusText.setTextColor(SUCCESS_COLOR)
+            statusText.setTextColor(ContextCompat.getColor(this, R.color.success_color))
         } else {
             statusText.text = getString(R.string.status_conn_failed)
             statusDescription.text = getString(R.string.conn_loading_desc)
-            statusText.setTextColor(FAILURE_COLOR)
+            statusText.setTextColor(ContextCompat.getColor(this, R.color.failure_color))
         }
     }
 
@@ -545,6 +431,11 @@ class MainActivity : AppCompatActivity() {
 
                 updateMessage("Errore durante la lettura: " + (e.message ?: e.javaClass.simpleName))
                 Toast.makeText(this@MainActivity, "Impossibile leggere la memoria della fotocamera", Toast.LENGTH_LONG).show()
+
+                galleryLoading.isVisible = false
+                mediaListContainer.removeAllViews()
+                mediaListContainer.isVisible = false
+                galleryEmpty.isVisible = true
             } finally {
                 isLoading = false
                 searchButton.isEnabled = selectedDevice != null
@@ -557,237 +448,66 @@ class MainActivity : AppCompatActivity() {
     // ---------------------------------------------------------
     private fun showGalleryLoading() {
         mediaListContainer.removeAllViews()
-
-        val loadingCard = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            gravity = Gravity.CENTER
-            setPadding(dp(24), dp(30), dp(24), dp(30))
-            background = roundedBackground(CARD_SECONDARY, dp(18))
-        }
-
-        // Indicatore animato
-        val progress = ProgressBar(
-            this,
-            null,
-            android.R.attr.progressBarStyleLarge
-        ).apply {
-            isIndeterminate = true
-            indeterminateTintList =
-                android.content.res.ColorStateList.valueOf(ACCENT_COLOR)
-        }
-
-        loadingCard.addView(
-            progress,
-            LinearLayout.LayoutParams(dp(48), dp(48)).apply {
-                bottomMargin = dp(20)
-            }
-        )
-
-        val title = TextView(this).apply {
-            text = getString(R.string.content_load_title)
-            textSize = 17f
-            setTypeface(null, Typeface.BOLD)
-            setTextColor(TEXT_PRIMARY)
-            gravity = Gravity.CENTER
-        }
-
-        val description = TextView(this).apply {
-            text = getString(R.string.content_load_desc)
-            textSize = 12f
-            setTextColor(TEXT_SECONDARY)
-            gravity = Gravity.CENTER
-            setPadding(0, dp(8), 0, 0)
-        }
-
-        loadingCard.addView(title)
-        loadingCard.addView(description)
-
-        mediaListContainer.addView(
-            loadingCard,
-            LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT
-            )
-        )
+        galleryEmpty.isVisible = false
+        galleryLoading.isVisible = true
     }
 
     private fun displayMediaList(device: UsbDevice, files: List<Fat32File>) {
         mediaListContainer.removeAllViews()
-        mediaFiles = files.filter { it.isImage }    // Filtro solo fotografie.
+        galleryLoading.isVisible = false
 
-        val images = mediaFiles
-        if (images.isEmpty()) {
-            mediaListContainer.addView(
-                TextView(this).apply {
-                    text = getString(R.string.content_empty)
-                    textSize = 14f
-                    setTextColor(TEXT_SECONDARY)
-                    gravity = Gravity.CENTER
-                    setPadding(dp(16), dp(30), dp(16), dp(30))
-                }
-            )
-            return
-        }
+        mediaFiles = files.filter { it.isImage }
+        galleryEmpty.isVisible = mediaFiles.isEmpty()
+        mediaListContainer.isVisible = mediaFiles.isNotEmpty()
 
-        // GRIGLIA: due card per riga.
-        if (isGridView) {
-            var index = 0
+        if (mediaFiles.isEmpty()) return
 
-            while (index < images.size) {
-                val row = LinearLayout(this).apply {
-                    orientation = LinearLayout.HORIZONTAL
-                    gravity = Gravity.TOP
-                }
+        mediaListContainer.columnCount = if (isGridView) 2 else 1
 
-                for (column in 0..1) {
-                    val currentIndex = index + column
-
-                    if (currentIndex < images.size) {
-                        val file = images[currentIndex]
-                        val card = createGridMediaCard(file, thumbnailBitmaps[file.relativePath])
-
-                        card.setOnClickListener { openMediaViewer(device, currentIndex) }
-
-                        row.addView(
-                            card,
-                            LinearLayout.LayoutParams(
-                                0,
-                                ViewGroup.LayoutParams.WRAP_CONTENT,
-                                1f
-                            ).apply {
-                                if (column == 0)
-                                    rightMargin = dp(6)
-                                else
-                                    leftMargin = dp(6)
-
-                                bottomMargin = dp(12)
-                            }
-                        )
-
-                    } else {
-                        // Mantiene la larghezza della seconda colonna.
-                        row.addView(View(this), LinearLayout.LayoutParams(0, 1, 1f))
-                    }
-                }
-
-                mediaListContainer.addView(row)
-                index += 2
+        mediaFiles.forEachIndexed { index, file ->
+            val layoutId = if (isGridView) {
+                R.layout.item_media_grid
+            } else {
+                R.layout.item_media_list
             }
-        } else {
-            // LISTA: visualizzazione precedente.
-            images.forEachIndexed { index, file ->
-                val card = createMediaCard(file)
 
-                card.setOnClickListener { openMediaViewer(device, index) }
-
-                mediaListContainer.addView(
-                    card,
-                    LinearLayout.LayoutParams(
-                        ViewGroup.LayoutParams.MATCH_PARENT,
-                        ViewGroup.LayoutParams.WRAP_CONTENT
-                    ).apply { bottomMargin = dp(12) }
-                )
-            }
-        }
-    }
-
-    private fun createMediaCard(file: Fat32File): View {
-        val card = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            setPadding(dp(12), dp(12), dp(12), dp( 12))
-
-            background = roundedBackground(CARD_COLOR, dp(18))
-            elevation = dp(1).toFloat()
-            isClickable = true
-            isFocusable = true
-        }
-
-        val thumbnail = ImageView(this).apply {
-            scaleType = ImageView.ScaleType.CENTER_CROP
-            background = roundedBackground(CARD_SECONDARY, dp(13))
-            clipToOutline = true
-
+            val card = layoutInflater.inflate(layoutId, mediaListContainer, false)
+            val thumbnail = card.findViewById<ImageView>(R.id.mediaThumbnail)
             val bitmap = thumbnailBitmaps[file.relativePath]
 
-            if (bitmap != null)
-                setImageBitmap(bitmap)
-            else {
-                setImageResource(android.R.drawable.ic_menu_gallery)
-                setColorFilter(TEXT_TERTIARY)
+            if (bitmap != null) {
+                thumbnail.setImageBitmap(bitmap)
+            } else {
+                thumbnail.setImageResource(android.R.drawable.ic_menu_gallery)
+                thumbnail.setColorFilter(ContextCompat.getColor(this, R.color.text_tertiary))
             }
 
-            layoutParams = LinearLayout.LayoutParams(dp(66), dp(66))
+            card.findViewById<TextView>(R.id.mediaName).text = file.name
+            card.findViewById<TextView>(R.id.mediaPath).text = file.relativePath
+            card.findViewById<TextView>(R.id.mediaSize).text = formatFileSize(file.size)
+            card.setOnClickListener { openMediaViewer(device, index) }
+
+            val params = GridLayout.LayoutParams().apply {
+                width = 0
+                height = ViewGroup.LayoutParams.WRAP_CONTENT
+                columnSpec = GridLayout.spec(GridLayout.UNDEFINED, 1f)
+                setMargins(dp(0), dp(0), dp(6), dp(12))
+            }
+
+            mediaListContainer.addView(card, params)
         }
-
-        val details = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(dp(13), 0, 0, 0)
-        }
-
-        val name = TextView(this).apply {
-            text = file.name
-            textSize = 14f
-            setTypeface(null, Typeface.BOLD)
-            setTextColor(TEXT_PRIMARY)
-            maxLines = 1
-            ellipsize = android.text.TextUtils.TruncateAt.END
-        }
-
-        val path = TextView(this).apply {
-            text = file.relativePath
-            textSize = 11f
-            setTextColor(TEXT_TERTIARY)
-            maxLines = 2
-            ellipsize = android.text.TextUtils.TruncateAt.MIDDLE
-            setPadding(0, dp(3), 0, 0)
-        }
-
-        val size = TextView(this).apply {
-            text = formatFileSize(file.size)
-            textSize = 11f
-            setTextColor(AMBER_COLOR)
-            setPadding(0, dp(5), 0, 0)
-        }
-
-        details.addView(name)
-        details.addView(path)
-        details.addView(size)
-
-        card.addView(thumbnail)
-
-        card.addView(
-            details,
-            LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
-        )
-
-        return card
     }
+
 
     // ---------------------------------------------------------
     // UTILITÀ UI
     // ---------------------------------------------------------
-    private fun sectionTitle(): TextView {
-        return TextView(this).apply {
-            text = getString(R.string.conn_title)
-            textSize = 11f
-            setTypeface(null, Typeface.BOLD)
-            setTextColor(Color.rgb(135, 141, 152))
-            letterSpacing = 0.08f
-        }
-    }
-
-    private fun spacer(height: Int): View {
-        return View(this).apply {
-            layoutParams = LinearLayout.LayoutParams(1, dp(height))
-        }
-    }
 
     private fun roundedBackground(color: Int, radius: Int): GradientDrawable {
         return GradientDrawable().apply {
             setColor(color)
             cornerRadius = radius.toFloat()
-            setStroke(dp(1), ColorUtils.setAlphaComponent(ACCENT_COLOR, 45))
+            setStroke(dp(1), ColorUtils.setAlphaComponent(accentColor, 45))
         }
     }
 
@@ -799,108 +519,9 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun createModeButton(symbol: String, action: () -> Unit): TextView {
-        return TextView(this).apply {
-            text = symbol
-            textSize = 25f
-            gravity = Gravity.CENTER
-            setPadding(dp(10), dp(5), dp(10), dp(5))
-            isClickable = true
-            isFocusable = true
-
-            setOnClickListener { action() }
-        }
-    }
-
-    private fun createGridMediaCard(file: Fat32File, preview: Bitmap?): View {
-        val card = SquareCardLayout(this).apply {
-            background = roundedBackground(CARD_COLOR, dp(18))
-            clipToOutline = true
-            elevation = dp(2).toFloat()
-            isClickable = true
-            isFocusable = true
-        }
-
-        val content = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(dp(10), dp(10), dp(10), dp(10))
-        }
-
-        // Anteprima: occupa tutto lo spazio verticale disponibile.
-        val thumbnail = ImageView(this).apply {
-            scaleType = ImageView.ScaleType.CENTER_CROP
-            setBackgroundColor(CARD_SECONDARY)
-
-            if (preview != null)
-                setImageBitmap(preview)
-            else {
-                setImageResource(android.R.drawable.ic_menu_gallery)
-                setColorFilter(TEXT_TERTIARY)
-                scaleType = ImageView.ScaleType.CENTER
-            }
-
-            clipToOutline = true
-            background = roundedBackground(CARD_SECONDARY, dp(12))
-        }
-
-        content.addView(
-            thumbnail,
-            LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f)
-                                 .apply { bottomMargin = dp(9) }
-        )
-
-        // Nome file: stessa dimensione della modalità elenco.
-        val name = TextView(this).apply {
-            text = file.name
-            textSize = 14f
-            setTypeface(null, Typeface.BOLD)
-            setTextColor(TEXT_PRIMARY)
-            maxLines = 1
-            ellipsize = android.text.TextUtils.TruncateAt.END
-        }
-
-        // Percorso: stessa dimensione della modalità elenco.
-        val path = TextView(this).apply {
-            text = file.relativePath
-            textSize = 11f
-            setTextColor(TEXT_TERTIARY)
-            maxLines = 1
-            ellipsize = android.text.TextUtils.TruncateAt.MIDDLE
-        }
-
-        // Dimensione: stessa dimensione della modalità elenco.
-        val size = TextView(this).apply {
-            text = formatFileSize(file.size)
-            textSize = 11f
-            setTextColor(AMBER_COLOR)
-            setPadding(0, dp(3), 0, 0)
-        }
-
-        content.addView(name)
-        content.addView(path)
-        content.addView(size)
-
-        card.addView(
-            content,
-            FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
-        )
-
-        return card
-    }
-
-
     private fun updateGalleryModeButtons() {
-        listModeButton.apply {
-            setTextColor(if (!isGridView) Color.BLACK else TEXT_TERTIARY)
-
-            background = roundedBackground(if (!isGridView) ACCENT_COLOR else CARD_COLOR, dp(10))
-        }
-
-        gridModeButton.apply {
-            setTextColor(if (isGridView) Color.BLACK else TEXT_TERTIARY)
-
-            background = roundedBackground(if (isGridView) ACCENT_COLOR else CARD_COLOR, dp(10))
-        }
+        listModeButton.isSelected = !isGridView
+        gridModeButton.isSelected = isGridView
     }
 
     private fun updateMessage(message: String) {
@@ -917,351 +538,111 @@ class MainActivity : AppCompatActivity() {
             return
 
         viewerPosition = position
+
         val dialog = Dialog(this)
+        val viewer = layoutInflater.inflate(R.layout.dialog_media_viewer, null)
 
-        // Contenitore principale
-        val container = FrameLayout(this).apply { setBackgroundColor(Color.TRANSPARENT) }
-        // Sfondo nero con opacità del 70%
-        val darkOverlay = View(this).apply { setBackgroundColor(Color.argb(179, 0, 0, 0)) }
+        val imageAndFilter = viewer.findViewById<GestureLinearLayout>(R.id.viewerImageAndFilter)
+        val image = viewer.findViewById<ImageView>(R.id.viewerImage)
+        val video = viewer.findViewById<VideoView>(R.id.viewerVideo)
+        val filterToggle = viewer.findViewById<ImageButton>(R.id.viewerFilterToggle)
+        val presetScroll = viewer.findViewById<HorizontalScrollView>(R.id.viewerPresetScroll)
+        val presetContainer = viewer.findViewById<LinearLayout>(R.id.viewerPresetContainer)
+        val info = viewer.findViewById<TextView>(R.id.viewerInfo)
 
-        container.addView(
-            darkOverlay,
-            FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.MATCH_PARENT
-            )
-        )
+        viewerDialog = dialog
+        viewerImage = image
+        viewerVideo = video
+        viewerInfo = info
 
-        // Layout principale
-        val content = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(dp(16), dp(12), dp(16), dp(18))
+        viewer.findViewById<TextView>(R.id.viewerCloseButton).setOnClickListener {
+            closeMediaViewer()
         }
 
-        container.addView(
-            content,
-            FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.MATCH_PARENT
-            )
-        )
-
-        // -----------------------------------------------------
-        // HEADER CON PULSANTE CHIUSURA
-        // -----------------------------------------------------
-        val header = FrameLayout(this)
-
-        val closeButton = TextView(this).apply {
-            text = "×"
-            textSize = 34f
-            gravity = Gravity.CENTER
-            setTextColor(Color.WHITE)
-            background = roundedBackground(CARD_SECONDARY, dp(30))
-            isClickable = true
-            isFocusable = true
-            setOnClickListener { closeMediaViewer() }
+        viewer.findViewById<ImageButton>(R.id.viewerSaveButton).setOnClickListener {
+            saveCurrentImageToGallery()
         }
-        header.addView(
-            closeButton,
-            FrameLayout.LayoutParams(dp(44), dp(44), Gravity.END or Gravity.CENTER_VERTICAL)
-        )
-        content.addView(
-            header,
-            LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(50))
-        )
 
-        // -----------------------------------------------------
-        // AREA FOTOGRAFIA
-        // -----------------------------------------------------
-        val middleArea = FrameLayout(this)
-        content.addView(
-            middleArea,
-            LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f)
-        )
-
-        // Foto + toggle, centrati nell'area elastica
-        val imageAndFilter = GestureLinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        middleArea.addView(
-            imageAndFilter,
-            FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT,
-                Gravity.CENTER
-            )
-        )
-
-        val image = ImageView(this).apply {
-            scaleType = ImageView.ScaleType.FIT_CENTER
-            adjustViewBounds = true
-        }
-        imageAndFilter.addView(
-            image,
-            LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT
-            )
-        )
-
-        // -----------------------------------------------------
-        // TOGGLE FILTRO - SUBITO SOTTO LA FOTO
-        // -----------------------------------------------------
-        val filterRow = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.END or Gravity.CENTER_VERTICAL
-        }
-        val filterToggle = TextView(this).apply {
-            text = ""
-            textSize = 14f
-            gravity = Gravity.CENTER
-            setTextColor(Color.BLACK)
-            isClickable = true
-            isFocusable = true
-            contentDescription = "Attiva o disattiva filtro"
+        viewer.findViewById<TextView>(R.id.viewerLookButton).setOnClickListener {
+            presetScroll.visibility = if (presetScroll.isVisible) View.INVISIBLE else View.VISIBLE
         }
 
         fun updateFilterToggle() {
-            filterToggle.text = if (viewerFilterEnabled) "✓" else ""
+            filterToggle.isSelected = viewerFilterEnabled
+        }
+        filterToggle.setOnClickListener {
+            viewerFilterEnabled = !viewerFilterEnabled
+            updateFilterToggle()
+            renderViewerImage()
+        }
 
-            filterToggle.background = GradientDrawable().apply {
-                shape = GradientDrawable.RECTANGLE
-                cornerRadius = dp(6).toFloat()
-                setColor(if (viewerFilterEnabled) ACCENT_COLOR else Color.TRANSPARENT)
-                setStroke(dp(1), ACCENT_COLOR)
+        // PRESET
+        val presetDefinitions = listOf(
+            "NATURAL" to ColorPresets.natural,
+            "VIVID" to ColorPresets.vivid,
+            "B/W" to ColorPresets.blackAndWhite,
+            "RETRO" to ColorPresets.retro,
+            "POP" to ColorPresets.pop,
+            "GOLDEN" to ColorPresets.goldenHour,
+            "ARCTIC" to ColorPresets.arctic,
+            "CREEPY" to ColorPresets.analogHorror
+        )
+
+        val presetChips = presetDefinitions.map { (label, preset) ->
+            val chip = TextView(this).apply {
+                text = label
+                gravity = android.view.Gravity.CENTER
+                setPadding(dp(14), 0, dp(14), 0)
+                isClickable = true
+                isFocusable = true
+            }
+
+            presetContainer.addView(
+                chip,
+                LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                    ViewGroup.LayoutParams.MATCH_PARENT
+                ).apply {
+                    marginEnd = dp(8)
+                }
+            )
+
+            chip to preset
+        }
+
+        fun updateLookChipStyles() {
+            presetChips.forEach { (chip, preset) ->
+                val selected = preset.id == viewerSelectedPreset.id
+                chip.background = roundedBackground(
+                    if (selected) accentColor else ContextCompat.getColor(this, R.color.card_secondary),
+                    dp(20)
+                )
+                chip.setTextColor(ContextCompat.getColor(this, if (selected) R.color.black else R.color.text_primary))
+            }
+        }
+
+        presetChips.forEach { (chip, preset) ->
+            chip.setOnClickListener {
+                viewerSelectedPreset = preset
+                viewerFilterEnabled = true
+                updateFilterToggle()
+                updateLookChipStyles()
+                renderViewerImage()
             }
         }
 
         updateFilterToggle()
+        updateLookChipStyles()
 
         filterToggle.setOnClickListener {
             viewerFilterEnabled = !viewerFilterEnabled
             updateFilterToggle()
             renderViewerImage()
         }
-        filterRow.addView(
-            filterToggle,
-            LinearLayout.LayoutParams(dp(25), dp(25))
-        )
 
-        // Aggiungi filterRow a imageAndFilter, non direttamente a content
-        imageAndFilter.addView(
-            filterRow,
-            LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                dp(29)
-            ).apply {
-                topMargin = dp(4)
-            }
-        )
-
-        // Pannello inferiore: contiene i pulsanti e le informazioni
-        val bottomPanel = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-
-        content.addView(
-            bottomPanel,
-            LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT
-            )
-        )
-
-        // -----------------------------------------------------
-        // CHIP PROFILI COLORE
-        // -----------------------------------------------------
-        val lookScrollView = HorizontalScrollView(this).apply {
-            isHorizontalScrollBarEnabled = false
-            overScrollMode = View.OVER_SCROLL_NEVER
-            visibility = View.INVISIBLE
-        }
-        val lookChips = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-        }
-        lookScrollView.addView(
-            lookChips,
-            ViewGroup.LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT,
-                ViewGroup.LayoutParams.MATCH_PARENT
-            )
-        )
-
-        val presetChips = mutableListOf<Pair<TextView, ColorPreset>>()
-
-        fun updateLookChipStyles() {
-            presetChips.forEach { (chip, preset) ->
-                val selected = preset.id == viewerSelectedPreset.id
-                chip.background = roundedBackground(
-                    if (selected) ACCENT_COLOR else CARD_SECONDARY,
-                    dp(20)
-                )
-                chip.setTextColor(if (selected) Color.BLACK else TEXT_PRIMARY)
-            }
-        }
-
-        fun createLookChip(label: String, preset: ColorPreset): TextView {
-            val chip = TextView(this).apply {
-                text = label
-                textSize = 10f
-                setTypeface(null, Typeface.BOLD)
-                gravity = Gravity.CENTER
-                setPadding(dp(13), dp(8), dp(13), dp(8))
-                background = roundedBackground(CARD_SECONDARY, dp(20))
-                isClickable = true
-                isFocusable = true
-
-                setOnClickListener {
-                    viewerSelectedPreset = preset
-                    viewerFilterEnabled = true
-
-                    updateFilterToggle()
-                    updateLookChipStyles()
-                    renderViewerImage()
-                }
-            }
-
-            presetChips.add(chip to preset)
-            return chip
-        }
-
-        lookChips.addView(
-            createLookChip("NATURAL", ColorPresets.natural),
-            LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(34))
-                                 .apply { marginEnd = dp(8) }
-        )
-        lookChips.addView(
-            createLookChip("VIVID", ColorPresets.vivid),
-            LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(34))
-                                 .apply { marginEnd = dp(8) }
-        )
-        lookChips.addView(
-            createLookChip("B/W", ColorPresets.blackAndWhite),
-            LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(34))
-                                 .apply { marginEnd = dp(8) }
-        )
-        lookChips.addView(
-            createLookChip("RETRO", ColorPresets.retro),
-            LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(34))
-                                 .apply { marginEnd = dp(8) }
-        )
-        lookChips.addView(
-            createLookChip("POP", ColorPresets.pop),
-            LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(34))
-                .apply { marginEnd = dp(8) }
-        )
-        lookChips.addView(
-            createLookChip("GOLDEN", ColorPresets.goldenHour),
-            LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(34))
-                .apply { marginEnd = dp(8) }
-        )
-        lookChips.addView(
-            createLookChip("ARCTIC", ColorPresets.arctic),
-            LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(34))
-                .apply { marginEnd = dp(8) }
-        )
-        lookChips.addView(
-            createLookChip("CREEPY", ColorPresets.analogHorror),
-            LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(34))
-                .apply { marginEnd = dp(8) }
-        )
-
-        updateLookChipStyles()
-
-        bottomPanel.addView(
-            lookScrollView,
-            LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(42))
-        )
-
-        // -----------------------------------------------------
-        // QUATTRO PULSANTI PRINCIPALI - SOLO ICONE
-        // Ordine da sinistra a destra:
-        // REGOLA - CONDIVIDI - SALVA - LOOK
-        // -----------------------------------------------------
-        val actions = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER
-        }
-
-        fun createViewerAction(symbol: String, description: String, onClick: (() -> Unit)? = null): TextView {
-            return TextView(this).apply {
-                text = symbol
-                textSize = 24f
-                gravity = Gravity.CENTER
-                setTextColor(ACCENT_COLOR)
-                background = roundedBackground(CARD_SECONDARY, dp(13))
-                isClickable = true
-                isFocusable = true
-                contentDescription = description
-
-                setOnClickListener { onClick?.invoke() }
-            }
-        }
-
-        // LOOK: mostra/nasconde i profili colore
-        val lookButton = createViewerAction("✦", "Profili colore") {
-            lookScrollView.isVisible = !lookScrollView.isVisible
-        }
-
-        // SALVA
-        val saveButton = createViewerAction("↓", "Salva") {
-            saveCurrentImageToGallery()
-        }
-
-        // CONDIVIDI
-        val shareButton = createViewerAction("↗", "Condividi")
-
-        // REGOLA
-        val adjustButton = createViewerAction("☷", "Regola")
-
-        listOf(
-            adjustButton,
-            saveButton,
-            shareButton,
-            lookButton
-        ).forEach { button ->
-            actions.addView(
-                button,
-                LinearLayout.LayoutParams(0, dp(52), 1f)
-                                     .apply {
-                                                marginStart = dp(4)
-                                                marginEnd = dp(4)
-                                            }
-            )
-        }
-
-        bottomPanel.addView(
-            actions,
-            LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(56))
-        )
-
-
-        // -----------------------------------------------------
-        // INFORMAZIONI FOTOGRAFIA
-        // -----------------------------------------------------
-        val info = TextView(this).apply {
-            textSize = 12f
-            setTextColor(TEXT_PRIMARY)
-            setPadding(dp(4), dp(12), dp(4), 0)
-            maxLines = 2
-        }
-
-        bottomPanel.addView(
-            info,
-            LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT
-            )
-        )
-
-        // Riferimenti utilizzati dal viewer
-        viewerDialog = dialog
-        viewerImage = image
-        viewerVideo = null
-        viewerInfo = info
-
-        // -----------------------------------------------------
-        // CONFIGURAZIONE DIALOG
-        // -----------------------------------------------------
-        dialog.setContentView(container)
+        dialog.setContentView(viewer)
         dialog.setCancelable(false)
+        dialog.show()
 
         dialog.window?.apply {
             setBackgroundDrawable(Color.TRANSPARENT.toDrawable())
@@ -1269,21 +650,12 @@ class MainActivity : AppCompatActivity() {
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT
             )
-
             addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)
             setDimAmount(0f)
         }
 
-        dialog.show()
-        dialog.window?.setLayout(
-            ViewGroup.LayoutParams.MATCH_PARENT,
-            ViewGroup.LayoutParams.MATCH_PARENT
-        )
-
-        // -----------------------------------------------------
-        // SFONDO BLUR (ANDROID 12+)
-        // -----------------------------------------------------
-        val underlyingContent = window.decorView.findViewById<View>(android.R.id.content)
+        val underlyingContent =
+            window.decorView.findViewById<View>(android.R.id.content)
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             underlyingContent.setRenderEffect(
@@ -1293,7 +665,6 @@ class MainActivity : AppCompatActivity() {
                     android.graphics.Shader.TileMode.CLAMP
                 )
             )
-
             blurredContentView = underlyingContent
         }
 
@@ -1308,9 +679,6 @@ class MainActivity : AppCompatActivity() {
             viewerInfo = null
         }
 
-        // -----------------------------------------------------
-        // SWIPE PER CAMBIARE FOTOGRAFIA
-        // -----------------------------------------------------
         val gestureDetector = GestureDetector(
             this,
             object : GestureDetector.SimpleOnGestureListener() {
@@ -1321,25 +689,29 @@ class MainActivity : AppCompatActivity() {
                     return true
                 }
 
-                override fun onFling(e1: MotionEvent?, e2: MotionEvent, velocityX: Float, velocityY: Float): Boolean {
-                    // Con i preset aperti, gli swipe non cambiano la foto.
-                    if (lookScrollView.isVisible)
+                override fun onFling(
+                    e1: MotionEvent?,
+                    e2: MotionEvent,
+                    velocityX: Float,
+                    velocityY: Float
+                ): Boolean {
+                    if (presetScroll.isVisible)
                         return false
 
                     val start = e1 ?: return false
-
                     val deltaX = e2.x - start.x
                     val deltaY = e2.y - start.y
 
-                    if (kotlin.math.abs(deltaX) > dp(70) &&
+                    if (
+                        kotlin.math.abs(deltaX) > dp(70) &&
                         kotlin.math.abs(deltaX) > kotlin.math.abs(deltaY) &&
-                        kotlin.math.abs(velocityX) > dp(100)) {
-                            if (deltaX < 0)
-                                showViewerItem(device, viewerPosition + 1)
-                            else
-                                showViewerItem(device, viewerPosition - 1)
-
-                            return true
+                        kotlin.math.abs(velocityX) > dp(100)
+                    ) {
+                        if (deltaX < 0)
+                            showViewerItem(device, viewerPosition + 1)
+                        else
+                            showViewerItem(device, viewerPosition - 1)
+                        return true
                     }
 
                     return false
@@ -1347,7 +719,9 @@ class MainActivity : AppCompatActivity() {
             }
         )
 
-        imageAndFilter.setOnTouchListener { _, event -> gestureDetector.onTouchEvent(event) }
+        imageAndFilter.setOnTouchListener { _, event ->
+            gestureDetector.onTouchEvent(event)
+        }
 
         showViewerItem(device, position)
     }
@@ -1733,8 +1107,10 @@ private class SquareCardLayout(context: Context) : FrameLayout(context) {
     }
 }
 
-private class GestureLinearLayout(context: Context) : LinearLayout(context) {
-    init { isClickable = true }
+class GestureLinearLayout @JvmOverloads constructor(
+    context: Context,
+    attrs: AttributeSet? = null
+) : LinearLayout(context, attrs) {
 
     override fun performClick(): Boolean {
         super.performClick()
