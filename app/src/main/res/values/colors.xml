@@ -15,6 +15,7 @@
     <color name="text_tertiary">#FF708091</color>
 
     <color name="accent_color">#FF5AD2E6</color>
+    <color name="accent_color_brd">#805AD2E6</color>
     <color name="success_color">#FF45F3AA</color>
     <color name="failure_color">#FFFF4FA3</color>
 

@@ -1,5 +1,6 @@
 <resources>
     <string name="app_name">NaturalCam</string>
+    <string name="app_start_letters">NC</string>
     <string name="app_subtitle">La tua fotocamera, senza complicazioni</string>
     <string name="lorem_ipsum">Testo segnaposto.</string>
     <string name="action_settings">Settings</string>
@@ -39,4 +40,14 @@
     <string name="viewer_save">Salva immagine</string>
     <string name="viewer_share">Condividi immagine</string>
     <string name="viewer_looks">Mostra preset colore</string>
+
+    <!-- PRESETS -->
+    <string name="back">Torna alla galleria</string>
+    <string name="presets_title">I tuoi preset</string>
+    <string name="presets_subtitle">Crea e personalizza i look delle tue foto</string>
+    <string name="presets_section">PRESET DISPONIBILI</string>
+    <string name="presets_empty">Non ci sono preset da mostrare</string>
+
+    <string name="presets_order">Modifica l’ordine dei preset</string>
+    <string name="presets_create">Crea preset</string>
 </resources>

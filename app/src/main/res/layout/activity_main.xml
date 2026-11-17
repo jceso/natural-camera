@@ -43,7 +43,7 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="30dp"
             android:text="@string/conn_title"
-            android:textColor="@color/card_secondary"
+            android:textColor="@color/text_secondary"
             android:textSize="11sp"
             android:textStyle="bold"
             android:letterSpacing="0.08" />
@@ -52,7 +52,7 @@
             android:id="@+id/connectionCard"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
+            android:layout_marginTop="8dp"
             android:background="@drawable/bg_connection_card"
             android:orientation="vertical"
             android:padding="18dp">

@@ -22,21 +22,20 @@
 
         <FrameLayout
             android:layout_width="match_parent"
-            android:layout_height="50dp">
+            android:layout_height="wrap_content">
 
-            <TextView
+            <ImageButton
                 android:id="@+id/viewerCloseButton"
-                android:layout_width="44dp"
-                android:layout_height="44dp"
+                android:layout_width="50dp"
+                android:layout_height="50dp"
                 android:layout_gravity="end|center_vertical"
                 android:background="@drawable/btn_close"
                 android:clickable="true"
                 android:contentDescription="@string/viewer_close"
                 android:focusable="true"
                 android:gravity="center"
-                android:text="×"
-                android:textColor="@color/failure_color"
-                android:textSize="34sp" />
+                android:src="@drawable/ic_cross"
+                app:tint="@color/failure_color" />
         </FrameLayout>
 
         <FrameLayout
@@ -142,7 +141,8 @@
                 android:background="@drawable/btn_look"
                 android:contentDescription="@string/viewer_looks"
                 android:gravity="center"
-                android:text="✦"
+                android:text="@string/app_start_letters"
+                android:textSize="30sp"
                 android:textColor="@color/btn_selectable" />
         </LinearLayout>
 

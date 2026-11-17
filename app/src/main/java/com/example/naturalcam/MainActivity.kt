@@ -465,19 +465,15 @@ class MainActivity : AppCompatActivity() {
         mediaListContainer.columnCount = if (isGridView) 2 else 1
 
         mediaFiles.forEachIndexed { index, file ->
-            val layoutId = if (isGridView) {
-                R.layout.item_media_grid
-            } else {
-                R.layout.item_media_list
-            }
+            val layoutId = if (isGridView) R.layout.item_media_grid else R.layout.item_media_list
 
             val card = layoutInflater.inflate(layoutId, mediaListContainer, false)
             val thumbnail = card.findViewById<ImageView>(R.id.mediaThumbnail)
             val bitmap = thumbnailBitmaps[file.relativePath]
 
-            if (bitmap != null) {
+            if (bitmap != null)
                 thumbnail.setImageBitmap(bitmap)
-            } else {
+            else {
                 thumbnail.setImageResource(android.R.drawable.ic_menu_gallery)
                 thumbnail.setColorFilter(ContextCompat.getColor(this, R.color.text_tertiary))
             }
@@ -487,12 +483,10 @@ class MainActivity : AppCompatActivity() {
             card.findViewById<TextView>(R.id.mediaSize).text = formatFileSize(file.size)
             card.setOnClickListener { openMediaViewer(device, index) }
 
-            val params = GridLayout.LayoutParams().apply {
-                width = 0
-                height = ViewGroup.LayoutParams.WRAP_CONTENT
-                columnSpec = GridLayout.spec(GridLayout.UNDEFINED, 1f)
-                setMargins(dp(0), dp(0), dp(6), dp(12))
-            }
+            val params = card.layoutParams as GridLayout.LayoutParams
+            params.width = 0
+            params.columnSpec = GridLayout.spec(GridLayout.UNDEFINED, 1f)
+            params.setMargins(dp(0), dp(0), dp(6), dp(12))
 
             mediaListContainer.addView(card, params)
         }
@@ -540,7 +534,8 @@ class MainActivity : AppCompatActivity() {
         viewerPosition = position
 
         val dialog = Dialog(this)
-        val viewer = layoutInflater.inflate(R.layout.dialog_media_viewer, null)
+        dialog.setContentView(R.layout.dialog_media_viewer)
+        val viewer = dialog.findViewById<View>(R.id.viewerRoot) ?: return
 
         val imageAndFilter = viewer.findViewById<GestureLinearLayout>(R.id.viewerImageAndFilter)
         val image = viewer.findViewById<ImageView>(R.id.viewerImage)
@@ -640,7 +635,6 @@ class MainActivity : AppCompatActivity() {
             renderViewerImage()
         }
 
-        dialog.setContentView(viewer)
         dialog.setCancelable(false)
         dialog.show()
 
@@ -679,13 +673,14 @@ class MainActivity : AppCompatActivity() {
             viewerInfo = null
         }
 
+        var singleTapDetected = false
         val gestureDetector = GestureDetector(
             this,
             object : GestureDetector.SimpleOnGestureListener() {
                 override fun onDown(e: MotionEvent): Boolean = true
 
                 override fun onSingleTapUp(e: MotionEvent): Boolean {
-                    imageAndFilter.performClick()
+                    singleTapDetected = true
                     return true
                 }
 
@@ -719,8 +714,18 @@ class MainActivity : AppCompatActivity() {
             }
         )
 
-        imageAndFilter.setOnTouchListener { _, event ->
-            gestureDetector.onTouchEvent(event)
+        imageAndFilter.setOnTouchListener { view, event ->
+            if (event.action == MotionEvent.ACTION_DOWN)
+                singleTapDetected = false
+
+            val handled = gestureDetector.onTouchEvent(event)
+            if (event.action == MotionEvent.ACTION_UP && singleTapDetected) {
+                singleTapDetected = false
+                view.performClick()
+            } else if (event.action == MotionEvent.ACTION_CANCEL)
+                singleTapDetected = false
+
+            handled
         }
 
         showViewerItem(device, position)
@@ -798,17 +803,19 @@ class MainActivity : AppCompatActivity() {
                 } else if (file.isVideo) {
                     val videoFile = withContext(Dispatchers.IO) {
                         val cacheFile = File(cacheDir, "viewer_${position}.${file.extension}")
-
                         cacheFile.writeBytes(bytes)
                         cacheFile
                     }
 
-                    viewerVideo?.apply {
-                        visibility = View.VISIBLE
+                    viewerVideo?.let { videoView ->
+                        videoView.visibility = View.VISIBLE
 
-                        setMediaController(MediaController(this@MainActivity).apply { setAnchorView(this@apply) })
-                        setVideoPath(videoFile.absolutePath)
-                        start()
+                        val controller = MediaController(this@MainActivity)
+                        controller.setAnchorView(videoView)
+
+                        videoView.setMediaController(controller)
+                        videoView.setVideoPath(videoFile.absolutePath)
+                        videoView.start()
                     }
                 }
             } catch (e: Exception) {
@@ -836,7 +843,6 @@ class MainActivity : AppCompatActivity() {
         } ?: throw IOException("Endpoint Bulk OUT non trovato")
 
         val connection = usbManager.openDevice(device) ?: throw IOException("Impossibile aprire la Rollei")
-
         try {
             if (!connection.claimInterface(usbInterface, true))
                 throw IOException("Interfaccia USB non disponibile")
