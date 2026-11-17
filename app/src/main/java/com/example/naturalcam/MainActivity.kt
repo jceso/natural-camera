@@ -44,7 +44,6 @@ import android.widget.ProgressBar
 import androidx.core.graphics.ColorUtils
 import com.example.naturalcam.photoProcessing.ColorPreset
 import com.example.naturalcam.photoProcessing.ColorPresets
-import com.example.naturalcam.photoProcessing.VibranceProcessor
 import kotlinx.coroutines.Job
 import java.io.File
 
@@ -55,6 +54,8 @@ import androidx.core.view.isVisible
 import android.util.AttributeSet
 import android.widget.GridLayout
 import android.widget.ImageButton
+import com.example.naturalcam.photoProcessing.PhotoProcessor
+import com.example.naturalcam.photoProcessing.PresetStore
 
 class MainActivity : AppCompatActivity() {
 
@@ -106,6 +107,11 @@ class MainActivity : AppCompatActivity() {
     private var viewerRenderToken = 0
     private var viewerLoadJob: Job? = null
 
+    private var presetsLoaded = false
+    private var presetLoadJob: Job? = null
+    private val presetStore by lazy { PresetStore(applicationContext) }
+    private var presets: List<ColorPreset> = emptyList()
+
 
     private val usbPermissionReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
@@ -138,6 +144,20 @@ class MainActivity : AppCompatActivity() {
         usbManager = getSystemService(USB_SERVICE) as UsbManager
 
         createInterface()
+
+        presetLoadJob = lifecycleScope.launch {
+            try {
+                presets = presetStore.load()
+                presetsLoaded = true
+            } catch (e: Exception) {
+                Toast.makeText(
+                    this@MainActivity,
+                    "Impossibile caricare i preset: ${e.localizedMessage}",
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+        }
+
         scanUsbDevices()
     }
 
@@ -530,6 +550,15 @@ class MainActivity : AppCompatActivity() {
     private fun openMediaViewer(device: UsbDevice, position: Int) {
         if (mediaFiles.isEmpty())
             return
+        if (!presetsLoaded) {
+            lifecycleScope.launch {
+                presetLoadJob?.join()
+
+                if (presetsLoaded)
+                    openMediaViewer(device, position)
+            }
+            return
+        }
 
         viewerPosition = position
 
@@ -550,7 +579,7 @@ class MainActivity : AppCompatActivity() {
         viewerVideo = video
         viewerInfo = info
 
-        viewer.findViewById<TextView>(R.id.viewerCloseButton).setOnClickListener {
+        viewer.findViewById<ImageButton>(R.id.viewerCloseButton).setOnClickListener {
             closeMediaViewer()
         }
 
@@ -572,20 +601,9 @@ class MainActivity : AppCompatActivity() {
         }
 
         // PRESET
-        val presetDefinitions = listOf(
-            "NATURAL" to ColorPresets.natural,
-            "VIVID" to ColorPresets.vivid,
-            "B/W" to ColorPresets.blackAndWhite,
-            "RETRO" to ColorPresets.retro,
-            "POP" to ColorPresets.pop,
-            "GOLDEN" to ColorPresets.goldenHour,
-            "ARCTIC" to ColorPresets.arctic,
-            "CREEPY" to ColorPresets.analogHorror
-        )
-
-        val presetChips = presetDefinitions.map { (label, preset) ->
+        val presetChips = presets.map { preset ->
             val chip = TextView(this).apply {
-                text = label
+                text = preset.name.uppercase()
                 gravity = android.view.Gravity.CENTER
                 setPadding(dp(14), 0, dp(14), 0)
                 isClickable = true
@@ -597,9 +615,7 @@ class MainActivity : AppCompatActivity() {
                 LinearLayout.LayoutParams(
                     ViewGroup.LayoutParams.WRAP_CONTENT,
                     ViewGroup.LayoutParams.MATCH_PARENT
-                ).apply {
-                    marginEnd = dp(8)
-                }
+                ).apply { marginEnd = dp(8) }
             )
 
             chip to preset
@@ -747,7 +763,7 @@ class MainActivity : AppCompatActivity() {
         lifecycleScope.launch {
             try {
                 val result = withContext(Dispatchers.Default) {
-                    VibranceProcessor.apply(source, preset)
+                    PhotoProcessor.apply(source, preset)
                 }
 
                 // Evita di mostrare il risultato se nel frattempo è stata aperta

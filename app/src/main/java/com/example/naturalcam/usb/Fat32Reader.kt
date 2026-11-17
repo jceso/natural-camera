@@ -19,10 +19,7 @@ data class Fat32File(
         get() = extension in setOf("avi", "mp4", "mov", "mkv", "3gp", "mpeg", "mpg")
 }
 
-class Fat32Reader(
-    private val transport: MassStorageTransport,
-    private val partitionStartLba: Long
-) {
+class Fat32Reader(private val transport: MassStorageTransport, private val partitionStartLba: Long) {
     private val sectorSize = 512
     private val fatSectorCache = mutableMapOf<Long, ByteArray>()
 
